@@ -120,3 +120,160 @@ export function svgToDataUrl(svgString: string): string {
   const encoded = encodeURIComponent(svgString);
   return `data:image/svg+xml,${encoded}`;
 }
+
+// Color conversion utilities for complementary color generation
+
+/**
+ * Convert hex color to HSL
+ */
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  
+  // Handle 3-digit hex
+  if (hex.length === 3) {
+    hex = hex.split('').map(char => char + char).join('');
+  }
+  
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const diff = max - min;
+  
+  let h = 0;
+  if (diff !== 0) {
+    if (max === r) {
+      h = ((g - b) / diff) % 6;
+    } else if (max === g) {
+      h = (b - r) / diff + 2;
+    } else {
+      h = (r - g) / diff + 4;
+    }
+  }
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  
+  const l = (max + min) / 2;
+  const s = diff === 0 ? 0 : diff / (1 - Math.abs(2 * l - 1));
+  
+  return {
+    h,
+    s: Math.round(s * 100),
+    l: Math.round(l * 100),
+  };
+}
+
+/**
+ * Convert HSL to hex color
+ */
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  
+  let r = 0, g = 0, b = 0;
+  
+  if (h >= 0 && h < 60) {
+    r = c; g = x; b = 0;
+  } else if (h >= 60 && h < 120) {
+    r = x; g = c; b = 0;
+  } else if (h >= 120 && h < 180) {
+    r = 0; g = c; b = x;
+  } else if (h >= 180 && h < 240) {
+    r = 0; g = x; b = c;
+  } else if (h >= 240 && h < 300) {
+    r = x; g = 0; b = c;
+  } else if (h >= 300 && h < 360) {
+    r = c; g = 0; b = x;
+  }
+  
+  r = Math.round((r + m) * 255);
+  g = Math.round((g + m) * 255);
+  b = Math.round((b + m) * 255);
+  
+  return '#' + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+/**
+ * Generate a complementary foreground color from a background color
+ * Similar to Tailwind's color shading - keeps the same hue but adjusts lightness
+ */
+export function generateComplementaryColor(backgroundHex: string): string {
+  const hsl = hexToHsl(backgroundHex);
+  if (!hsl) return '#64748b'; // Default fallback
+  
+  let newLightness: number;
+  
+  // If background is very light (L > 85%), make foreground much darker
+  if (hsl.l > 85) {
+    newLightness = hsl.l - 45; // Much darker
+  } 
+  // If background is medium (L 40-85%), make foreground darker by ~40%
+  else if (hsl.l > 40) {
+    newLightness = hsl.l - 40; // Moderately darker
+  } 
+  // If background is dark (L < 40%), make foreground lighter
+  else {
+    newLightness = hsl.l + 30; // Lighter for dark backgrounds
+  }
+  
+  // Clamp lightness between 10% and 90%
+  newLightness = Math.max(10, Math.min(90, newLightness));
+  
+  // Slightly adjust saturation for better contrast (increase if low)
+  const newSaturation = hsl.s < 30 ? Math.min(100, hsl.s + 20) : hsl.s;
+  
+  return hslToHex(hsl.h, newSaturation, newLightness);
+}
+
+/**
+ * Check if dark mode is active
+ */
+export function isDarkMode(): boolean {
+  // Check for .dark class on document element (Tailwind dark mode)
+  if (document.documentElement.classList.contains('dark')) {
+    return true;
+  }
+  
+  // Check for prefers-color-scheme media query
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Lighten a color for dark mode
+ */
+function lightenColor(hex: string, amount: number = 30): string {
+  const hsl = hexToHsl(hex);
+  if (!hsl) return hex;
+  
+  const newLightness = Math.min(90, hsl.l + amount);
+  return hslToHex(hsl.h, hsl.s, newLightness);
+}
+
+/**
+ * Adjust colors for dark mode - swaps background and foreground
+ */
+export function adjustColorsForDarkMode(
+  bg: string, 
+  fg: string
+): { bg: string; fg: string } {
+  if (bg === 'transparent') {
+    // For transparent backgrounds, just lighten foreground for dark mode
+    return { bg: 'transparent', fg: lightenColor(fg, 20) };
+  }
+  // Swap colors for dark mode
+  return { bg: fg, fg: bg };
+}

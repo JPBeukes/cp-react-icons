@@ -4,6 +4,7 @@ import { FiBox } from 'react-icons/fi';
 
 interface PaddingSettingsProps {
   iconColor: string;
+  backgroundColor?: string;
   value: number; // Padding percentage (0-0.5)
   onChange: (padding: number) => void;
 }
@@ -18,7 +19,7 @@ const PADDING_PRESETS = [
 const PREVIEW_SIZE = 120;
 const PREVIEW_ICON_SIZE = 48;
 
-export default function PaddingSettings({ iconColor, value, onChange }: PaddingSettingsProps) {
+export default function PaddingSettings({ iconColor, backgroundColor = 'transparent', value, onChange }: PaddingSettingsProps) {
   const previewIconRef = useRef<HTMLDivElement>(null);
 
   const handlePresetClick = (presetValue: number) => {
@@ -40,13 +41,24 @@ export default function PaddingSettings({ iconColor, value, onChange }: PaddingS
       {/* Preview */}
       <div className="flex items-center justify-center p-4 border rounded-lg bg-muted/30">
         <div
-          className="relative border-2 border-dashed border-muted-foreground/30 rounded bg-background"
+          className="relative border-2 border-dashed border-muted-foreground/30 rounded"
           style={{
             width: `${containerSize}px`,
             height: `${containerSize}px`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
+            backgroundImage: backgroundColor === 'transparent' 
+              ? `linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+                 linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+                 linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+                 linear-gradient(-45deg, transparent 75%, #e0e0e0 75%)`
+              : undefined,
+            backgroundSize: backgroundColor === 'transparent' ? '12px 12px' : undefined,
+            backgroundPosition: backgroundColor === 'transparent' 
+              ? '0 0, 0 6px, 6px -6px, -6px 0px' 
+              : undefined,
           }}
         >
           {/* Padding visualization - shows the padding area around the icon */}

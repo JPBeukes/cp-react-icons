@@ -9,6 +9,7 @@ interface IconItemProps {
   iconName: string;
   displayName: string;
   iconColor: string;
+  backgroundColor?: string;
   copyFormat: 'text' | 'png';
   displaySize?: number;
   copySize?: number;
@@ -20,6 +21,7 @@ export default function IconItem({
   iconName,
   displayName,
   iconColor,
+  backgroundColor = 'transparent',
   copyFormat,
   displaySize = 64,
   copySize = 64,
@@ -89,7 +91,7 @@ export default function IconItem({
       const svgString = getSvgStringFromElement(
         iconRef.current,
         iconColor,
-        'transparent',
+        backgroundColor,
         copySize,
         currentPadding
       );
@@ -102,9 +104,9 @@ export default function IconItem({
             await copySvgAsPng(svgString, copySize);
             formatName = 'PNG image';
           } else {
-            // Copy as SVG file (now uses ClipboardItem API)
+            // Copy as SVG (uses ClipboardItem API)
             await copySvgToClipboard(svgString);
-            formatName = 'SVG file';
+            formatName = 'SVG';
           }
 
           // Show success toast
@@ -129,7 +131,7 @@ export default function IconItem({
           let errorMessage = 'Failed to copy icon to clipboard';
           if (copyError.message) {
             if (copyError.message.includes('not supported')) {
-              errorMessage = 'Your browser doesn\'t support copying files. Try copying as SVG text or PNG instead.';
+              errorMessage = 'Your browser doesn\'t support copying files. Try copying as SVG or PNG instead.';
             } else if (copyError.message.includes('permissions')) {
               errorMessage = 'Clipboard permission denied. Please allow clipboard access and try again.';
             } else {
@@ -161,15 +163,34 @@ export default function IconItem({
     >
       <div className="flex flex-col items-center gap-2">
         <div
-          ref={iconRef}
-          className="flex items-center justify-center"
-          style={{ color: iconColor, width: `${displaySize}px`, height: `${displaySize}px` }}
+          className="flex items-center justify-center rounded"
+          style={{ 
+            width: `${displaySize}px`, 
+            height: `${displaySize}px`,
+            backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
+            backgroundImage: backgroundColor === 'transparent' 
+              ? `linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+                 linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+                 linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+                 linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)`
+              : undefined,
+            backgroundSize: backgroundColor === 'transparent' ? '8px 8px' : undefined,
+            backgroundPosition: backgroundColor === 'transparent' 
+              ? '0 0, 0 4px, 4px -4px, -4px 0px' 
+              : undefined,
+          }}
         >
-          {IconComponent ? (
-            <IconComponent size={displaySize} color={iconColor} />
-          ) : (
-            <div className="w-full h-full bg-muted animate-pulse rounded" />
-          )}
+          <div
+            ref={iconRef}
+            className="flex items-center justify-center"
+            style={{ color: iconColor }}
+          >
+            {IconComponent ? (
+              <IconComponent size={displaySize} color={iconColor} />
+            ) : (
+              <div className="w-full h-full bg-muted animate-pulse rounded" />
+            )}
+          </div>
         </div>
         <span className="text-xs text-muted-foreground text-center">
           {displayName}

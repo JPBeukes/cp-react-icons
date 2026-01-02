@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { generateComplementaryColor } from '@/lib/iconUtils';
 
 interface ColorPickerProps {
-  value: string;
-  onChange: (color: string) => void;
+  backgroundValue: string;
+  foregroundValue: string;
+  onBackgroundChange: (color: string) => void;
+  onForegroundChange: (color: string) => void;
+  onSwap?: () => void;
 }
 
 const STORAGE_KEY = 'colorPickerCustomColors';
@@ -60,87 +64,32 @@ function rgbToHex(r: number, g: number, b: number): string {
   }).join('');
 }
 
-function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
-  r /= 255;
-  g /= 255;
-  b /= 255;
+type ColorMode = 'foreground' | 'background';
 
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const diff = max - min;
-
-  let h = 0;
-  if (diff !== 0) {
-    if (max === r) {
-      h = ((g - b) / diff) % 6;
-    } else if (max === g) {
-      h = (b - r) / diff + 2;
-    } else {
-      h = (r - g) / diff + 4;
-    }
-  }
-  h = Math.round(h * 60);
-  if (h < 0) h += 360;
-
-  const s = max === 0 ? 0 : diff / max;
-  const v = max;
-
-  return { h, s: s * 100, v: v * 100 };
-}
-
-function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: number } {
-  s /= 100;
-  v /= 100;
-
-  const c = v * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = v - c;
-
-  let r = 0, g = 0, b = 0;
-
-  if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
-  } else if (h >= 300 && h < 360) {
-    r = c; g = 0; b = x;
-  }
-
-  r = Math.round((r + m) * 255);
-  g = Math.round((g + m) * 255);
-  b = Math.round((b + m) * 255);
-
-  return { r, g, b };
-}
-
-export default function ColorPicker({ value, onChange }: ColorPickerProps) {
+export default function ColorPicker({ 
+  backgroundValue, 
+  foregroundValue, 
+  onBackgroundChange, 
+  onForegroundChange,
+  onSwap 
+}: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [colorMode, setColorMode] = useState<ColorMode>('foreground');
+  const [isLinked, setIsLinked] = useState(true); // Linked by default
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customColors, setCustomColors] = useState<string[]>(loadCustomColors);
-  const [tempColor, setTempColor] = useState(value || DEFAULT_COLOR);
   const [isEditingNewColor, setIsEditingNewColor] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gradientRef = useRef<HTMLDivElement>(null);
-  const sliderRef = useRef<HTMLDivElement>(null);
 
-  const [hsv, setHsv] = useState(() => {
-    const rgb = hexToRgb(value || DEFAULT_COLOR);
-    return rgb ? rgbToHsv(rgb.r, rgb.g, rgb.b) : { h: 0, s: 0, v: 100 };
-  });
+  // Determine which color we're currently editing
+  const currentValue = colorMode === 'background' ? backgroundValue : foregroundValue;
+  const currentOnChange = colorMode === 'background' ? onBackgroundChange : onForegroundChange;
+  const [tempColor, setTempColor] = useState(currentValue === 'transparent' ? DEFAULT_COLOR : currentValue);
 
   useEffect(() => {
-    const rgb = hexToRgb(value || DEFAULT_COLOR);
-    if (rgb) {
-      setHsv(rgbToHsv(rgb.r, rgb.g, rgb.b));
-      setTempColor(value || DEFAULT_COLOR);
-    }
-  }, [value]);
+    const colorToUse = currentValue === 'transparent' ? DEFAULT_COLOR : currentValue;
+    setTempColor(colorToUse);
+  }, [currentValue]);
 
   const savePendingColor = useCallback(() => {
     if (!isEditingNewColor) {
@@ -195,18 +144,39 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
   const handleColorSelect = (color: string) => {
     savePendingColor();
     setIsEditingNewColor(false);
-    onChange(color);
+    
+    if (colorMode === 'foreground') {
+      onForegroundChange(color);
+      // If linked, auto-generate complementary background
+      if (isLinked && color !== 'transparent') {
+        const complementary = generateComplementaryColor(color);
+        onBackgroundChange(complementary);
+      }
+    } else {
+      onBackgroundChange(color);
+    }
+    
     setIsOpen(false);
     setShowCustomPicker(false);
+  };
+
+  const handleTransparentSelect = () => {
+    if (colorMode === 'background') {
+      onBackgroundChange('transparent');
+      setIsOpen(false);
+      setShowCustomPicker(false);
+    }
   };
 
   const handleStartEditingNewColor = () => {
     setIsEditingNewColor(true);
     setShowCustomPicker(true);
-    // Set the current temp color as the selected value so it shows as highlighted
-    onChange(tempColor);
+    const colorToUse = currentValue === 'transparent' ? DEFAULT_COLOR : currentValue;
+    setTempColor(colorToUse);
+    if (currentValue !== 'transparent') {
+      currentOnChange(colorToUse);
+    }
   };
-
 
   const handleRemoveCustomColor = (e: React.MouseEvent, color: string) => {
     e.stopPropagation();
@@ -215,91 +185,193 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
     saveCustomColors(updatedColors);
   };
 
-  const handleGradientClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!gradientRef.current) return;
-    const rect = gradientRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    
-    const newS = x * 100;
-    const newV = (1 - y) * 100;
-    const newHsv = { ...hsv, s: newS, v: newV };
-    setHsv(newHsv);
-    
-    const rgb = hsvToRgb(newHsv.h, newHsv.s, newHsv.v);
-    const newColor = rgbToHex(rgb.r, rgb.g, rgb.b);
-    setTempColor(newColor);
-    onChange(newColor);
+  const handleToggleLink = () => {
+    setIsLinked(!isLinked);
+    // If linking, update background to match foreground
+    if (!isLinked) {
+      if (foregroundValue !== 'transparent') {
+        const complementary = generateComplementaryColor(foregroundValue);
+        onBackgroundChange(complementary);
+      }
+    }
   };
 
-  const handleSliderClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!sliderRef.current) return;
-    const rect = sliderRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const newH = x * 360;
-    const newHsv = { ...hsv, h: newH };
-    setHsv(newHsv);
-    
-    const rgb = hsvToRgb(newHsv.h, newHsv.s, newHsv.v);
-    const newColor = rgbToHex(rgb.r, rgb.g, rgb.b);
-    setTempColor(newColor);
-    onChange(newColor);
-  };
+  // Render checkerboard pattern for transparent background
+  const renderTransparentPattern = () => (
+    <div
+      className="absolute inset-0 rounded-lg"
+      style={{
+        backgroundImage: `
+          linear-gradient(45deg, #ccc 25%, transparent 25%),
+          linear-gradient(-45deg, #ccc 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #ccc 75%),
+          linear-gradient(-45deg, transparent 75%, #ccc 75%)
+        `,
+        backgroundSize: '8px 8px',
+        backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+      }}
+    />
+  );
 
-  const handleRgbChange = (channel: 'r' | 'g' | 'b', val: number) => {
-    const rgb = hexToRgb(tempColor);
-    if (!rgb) return;
-    
-    const newRgb = { ...rgb, [channel]: Math.max(0, Math.min(255, val)) };
-    const newColor = rgbToHex(newRgb.r, newRgb.g, newRgb.b);
-    setTempColor(newColor);
-    onChange(newColor);
-    
-    const newHsv = rgbToHsv(newRgb.r, newRgb.g, newRgb.b);
-    setHsv(newHsv);
+  const openColorPicker = (mode: ColorMode) => {
+    setColorMode(mode);
+    setIsOpen(true);
   };
-
-  const currentRgb = hexToRgb(tempColor) || { r: 0, g: 0, b: 0 };
-  const gradientBg = `hsl(${hsv.h}, 100%, 50%)`;
-  const sliderBg = `linear-gradient(to right, 
-    hsl(0, 100%, 50%), 
-    hsl(60, 100%, 50%), 
-    hsl(120, 100%, 50%), 
-    hsl(180, 100%, 50%), 
-    hsl(240, 100%, 50%), 
-    hsl(300, 100%, 50%), 
-    hsl(360, 100%, 50%))`;
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="h-10 w-10 cursor-pointer rounded-md border-2 border-border hover:border-primary transition-colors"
-        style={{ backgroundColor: value || DEFAULT_COLOR }}
-        aria-label="Select color"
-      />
+      <div className="flex items-center gap-3">
+        {/* Foreground Color Swatch */}
+        <div className="flex flex-col items-center gap-1.5">
+          <label className="text-xs font-semibold text-foreground">FG</label>
+          <button
+            type="button"
+            onClick={() => openColorPicker('foreground')}
+            className="relative h-16 w-16 cursor-pointer rounded-lg border-2 border-border hover:border-primary transition-colors overflow-hidden"
+            style={{ backgroundColor: foregroundValue }}
+            aria-label="Select foreground color"
+          >
+            {foregroundValue === 'transparent' && renderTransparentPattern()}
+          </button>
+        </div>
 
+        {/* Control Buttons */}
+        <div className="flex flex-col items-center gap-2">
+          {/* Swap Button */}
+          {onSwap && backgroundValue !== 'transparent' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSwap();
+              }}
+              className="h-8 w-8 rounded-md border border-border hover:border-primary hover:bg-accent transition-colors flex items-center justify-center"
+              aria-label="Swap background and foreground colors"
+              title="Swap colors"
+            >
+              <svg
+                className="w-4 h-4 text-muted-foreground"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                />
+              </svg>
+            </button>
+          )}
+
+          {/* Link/Unlink Button */}
+          <button
+            type="button"
+            onClick={handleToggleLink}
+            className={`h-8 w-8 rounded-md border transition-colors flex items-center justify-center ${
+              isLinked
+                ? 'border-primary bg-primary/10 hover:bg-primary/20'
+                : 'border-border hover:border-primary hover:bg-accent'
+            }`}
+            aria-label={isLinked ? 'Unlink colors' : 'Link colors'}
+            title={isLinked ? 'Unlink colors' : 'Link colors'}
+          >
+            <svg
+              className={`w-4 h-4 ${isLinked ? 'text-primary' : 'text-muted-foreground'}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {isLinked ? (
+                // Linked chain icon
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                />
+              ) : (
+                // Unlinked chain icon (broken chain with slash)
+                <>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                    opacity="0.5"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6"
+                  />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
+
+        {/* Background Color Swatch */}
+        <div className="flex flex-col items-center gap-1.5">
+          <label className="text-xs font-semibold text-foreground">BG</label>
+          <button
+            type="button"
+            onClick={() => openColorPicker('background')}
+            className="relative h-16 w-16 cursor-pointer rounded-lg border-2 border-border hover:border-primary transition-colors overflow-hidden"
+            style={{ backgroundColor: backgroundValue === 'transparent' ? 'transparent' : backgroundValue }}
+            aria-label="Select background color"
+          >
+            {backgroundValue === 'transparent' && renderTransparentPattern()}
+          </button>
+        </div>
+      </div>
+
+      {/* Color Picker Popup */}
       {isOpen && (
-        <div className="absolute top-12 left-0 z-50 bg-popover border border-border rounded-lg shadow-lg p-3 min-w-[240px]">
-          {/* Preset Colors */}
-          <div className="grid grid-cols-4 gap-1.5 mb-3">
-            {PRESET_COLORS.map((color) => (
+        <div className="absolute top-20 left-0 z-50 bg-popover border border-border rounded-lg shadow-lg p-3 min-w-[280px]">
+          {/* Mode Indicator */}
+          <div className="mb-3">
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md ${
+              colorMode === 'foreground'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted'
+            }`}>
+              <span className="font-medium">
+                {colorMode === 'foreground' ? 'Foreground' : 'Background'} Color
+              </span>
+            </div>
+          </div>
+
+          {/* Transparent option for background */}
+          {colorMode === 'background' && (
+            <div className="mb-3">
               <button
-                key={color}
                 type="button"
-                onClick={() => handleColorSelect(color)}
-                className={`h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 ${
-                  value.toLowerCase() === color.toLowerCase()
+                onClick={handleTransparentSelect}
+                className={`w-full h-10 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
+                  backgroundValue === 'transparent'
                     ? 'border-primary ring-2 ring-primary ring-offset-2'
                     : 'border-border hover:border-primary'
                 }`}
-                style={{ backgroundColor: color }}
-                aria-label={`Select color ${color}`}
+                style={{
+                  backgroundImage: `
+                    linear-gradient(45deg, #ccc 25%, transparent 25%),
+                    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                    linear-gradient(45deg, transparent 75%, #ccc 75%),
+                    linear-gradient(-45deg, transparent 75%, #ccc 75%)
+                  `,
+                  backgroundSize: '12px 12px',
+                  backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+                }}
               >
-                {value.toLowerCase() === color.toLowerCase() && (
+                <span className="text-sm font-medium bg-background/80 px-2 py-1 rounded">
+                  Transparent
+                </span>
+                {backgroundValue === 'transparent' && (
                   <svg
-                    className="w-5 h-5 m-auto text-white drop-shadow-lg"
+                    className="w-5 h-5 text-primary drop-shadow-lg"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -313,7 +385,45 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
                   </svg>
                 )}
               </button>
-            ))}
+            </div>
+          )}
+
+          {/* Preset Colors */}
+          <div className="grid grid-cols-4 gap-1.5 mb-3">
+            {PRESET_COLORS.map((color) => {
+              const isSelected = currentValue !== 'transparent' && 
+                currentValue.toLowerCase() === color.toLowerCase();
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => handleColorSelect(color)}
+                  className={`h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 ${
+                    isSelected
+                      ? 'border-primary ring-2 ring-primary ring-offset-2'
+                      : 'border-border hover:border-primary'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Select color ${color}`}
+                >
+                  {isSelected && (
+                    <svg
+                      className="w-5 h-5 m-auto text-white drop-shadow-lg"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Divider and Custom Colors */}
@@ -321,25 +431,46 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
             <>
               <div className="border-t border-border my-3" />
               <div className="grid grid-cols-4 gap-1.5 mb-3">
-                {customColors.map((color) => (
-                  <div
-                    key={color}
-                    className="relative group"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleColorSelect(color)}
-                      className={`h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 ${
-                        value.toLowerCase() === color.toLowerCase()
-                          ? 'border-primary ring-2 ring-primary ring-offset-2'
-                          : 'border-border hover:border-primary'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      aria-label={`Select color ${color}`}
-                    >
-                      {value.toLowerCase() === color.toLowerCase() && (
+                {customColors.map((color) => {
+                  const isSelected = currentValue !== 'transparent' && 
+                    currentValue.toLowerCase() === color.toLowerCase();
+                  return (
+                    <div key={color} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => handleColorSelect(color)}
+                        className={`h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 ${
+                          isSelected
+                            ? 'border-primary ring-2 ring-primary ring-offset-2'
+                            : 'border-border hover:border-primary'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        aria-label={`Select color ${color}`}
+                      >
+                        {isSelected && (
+                          <svg
+                            className="w-5 h-5 m-auto text-white drop-shadow-lg"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleRemoveCustomColor(e, color)}
+                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center border border-background shadow-sm hover:bg-destructive/90"
+                        aria-label={`Remove color ${color}`}
+                      >
                         <svg
-                          className="w-5 h-5 m-auto text-white drop-shadow-lg"
+                          className="w-2.5 h-2.5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -348,47 +479,29 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={3}
-                            d="M5 13l4 4L19 7"
+                            d="M6 18L18 6M6 6l12 12"
                           />
                         </svg>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleRemoveCustomColor(e, color)}
-                      className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center border border-background shadow-sm hover:bg-destructive/90"
-                      aria-label={`Remove color ${color}`}
-                    >
-                      <svg
-                        className="w-2.5 h-2.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={3}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                      </button>
+                    </div>
+                  );
+                })}
                 {/* Add new color button or preview of new color being edited */}
                 {isEditingNewColor ? (
                   <button
                     type="button"
                     onClick={() => handleColorSelect(tempColor)}
                     className={`h-10 w-10 rounded-lg border-2 transition-all hover:scale-110 ${
-                      value.toLowerCase() === tempColor.toLowerCase()
+                      currentValue !== 'transparent' && 
+                      currentValue.toLowerCase() === tempColor.toLowerCase()
                         ? 'border-primary ring-2 ring-primary ring-offset-2'
                         : 'border-border hover:border-primary'
                     }`}
                     style={{ backgroundColor: tempColor }}
                     aria-label={`Select color ${tempColor}`}
                   >
-                    {value.toLowerCase() === tempColor.toLowerCase() && (
+                    {currentValue !== 'transparent' && 
+                     currentValue.toLowerCase() === tempColor.toLowerCase() && (
                       <svg
                         className="w-5 h-5 m-auto text-white drop-shadow-lg"
                         fill="none"
@@ -449,7 +562,12 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
                     onChange={(e) => {
                       const newColor = e.target.value;
                       setTempColor(newColor);
-                      onChange(newColor);
+                      currentOnChange(newColor);
+                      // If linked and changing foreground, update background
+                      if (isLinked && colorMode === 'foreground' && newColor !== 'transparent') {
+                        const complementary = generateComplementaryColor(newColor);
+                        onBackgroundChange(complementary);
+                      }
                     }}
                     className="h-10 w-20 cursor-pointer rounded border"
                   />
@@ -468,7 +586,12 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
                   onChange={(e) => {
                     const newColor = e.target.value;
                     setTempColor(newColor);
-                    onChange(newColor);
+                    currentOnChange(newColor);
+                    // If linked and changing foreground, update background
+                    if (isLinked && colorMode === 'foreground' && newColor !== 'transparent') {
+                      const complementary = generateComplementaryColor(newColor);
+                      onBackgroundChange(complementary);
+                    }
                   }}
                   className="h-10 w-20 cursor-pointer rounded border"
                 />
@@ -480,4 +603,3 @@ export default function ColorPicker({ value, onChange }: ColorPickerProps) {
     </div>
   );
 }
-

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import IconItem from './IconItem';
 import { featherIcons } from '@/lib/iconData';
 import { Input } from './ui/input';
@@ -6,6 +6,7 @@ import ColorPicker from './ColorPicker';
 import { Dropdown, DropdownItem } from './ui/dropdown';
 import { Button } from './ui/button';
 import PaddingSettings from './PaddingSettings';
+import { generateComplementaryColor, isDarkMode, adjustColorsForDarkMode } from '@/lib/iconUtils';
 
 interface IconBrowserProps {
   initialColor?: string;
@@ -19,23 +20,53 @@ const DEFAULT_PADDING = 0.10; // 10% padding (Medium preset)
 
 export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowserProps) {
   const [searchValue, setSearchValue] = useState('');
-  const [iconColor, setIconColor] = useState(initialColor);
+  const [backgroundColor, setBackgroundColor] = useState<string>('transparent');
+  const [foregroundColor, setForegroundColor] = useState(initialColor);
   const [copyFormat, setCopyFormat] = useState<'text' | 'png'>('text');
   const [iconSize, setIconSize] = useState<number>(64);
   const [customSize, setCustomSize] = useState<string>('');
   const [showCustomSize, setShowCustomSize] = useState(false);
   const [iconPadding, setIconPadding] = useState<number>(DEFAULT_PADDING);
   const [filteredIcons, setFilteredIcons] = useState<typeof featherIcons>([]);
+  const [darkMode, setDarkMode] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Detect platform for keyboard shortcut display
+  const [shortcutKey, setShortcutKey] = useState('⌘K');
+  
+  useEffect(() => {
+    // Better platform detection
+    const isMac = navigator.platform.toUpperCase().includes('MAC') || 
+                  navigator.userAgent.toUpperCase().includes('MAC');
+    setShortcutKey(isMac ? '⌘K' : 'Ctrl+K');
+  }, []);
 
   useEffect(() => {
-    // Load saved color, or use default if none saved
-    const savedColor = localStorage.getItem('iconColor');
-    if (savedColor) {
-      setIconColor(savedColor);
+    // Load saved colors, or use defaults if none saved
+    const savedForeground = localStorage.getItem('iconColor');
+    const savedBackground = localStorage.getItem('iconBackgroundColor');
+    
+    let initialBg = 'transparent';
+    let initialFg = DEFAULT_COLOR;
+    
+    if (savedBackground) {
+      initialBg = savedBackground;
     } else {
-      setIconColor(DEFAULT_COLOR);
-      localStorage.setItem('iconColor', DEFAULT_COLOR);
+      localStorage.setItem('iconBackgroundColor', 'transparent');
     }
+    
+    if (savedForeground) {
+      initialFg = savedForeground;
+    } else {
+      // If no saved foreground and background is not transparent, generate complementary
+      if (initialBg !== 'transparent') {
+        initialFg = generateComplementaryColor(initialBg);
+      }
+      localStorage.setItem('iconColor', initialFg);
+    }
+    
+    setBackgroundColor(initialBg);
+    setForegroundColor(initialFg);
 
     // Load saved copy format
     const savedFormat = localStorage.getItem('copyFormat') as 'text' | 'png' | null;
@@ -78,13 +109,32 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
 
     // Listen for color changes (for potential future external components)
     const handleColorChange = ((e: CustomEvent) => {
-      setIconColor(e.detail.color);
+      setForegroundColor(e.detail.color);
     }) as EventListener;
 
     document.addEventListener('iconColorChange', handleColorChange);
 
+    // Listen for dark mode changes
+    const updateDarkMode = () => {
+      setDarkMode(isDarkMode());
+    };
+
+    updateDarkMode(); // Initial check
+
+    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    darkModeQuery.addEventListener('change', updateDarkMode);
+
+    // Also listen for class changes on document element (Tailwind dark mode)
+    const observer = new MutationObserver(updateDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
     return () => {
       document.removeEventListener('iconColorChange', handleColorChange);
+      darkModeQuery.removeEventListener('change', updateDarkMode);
+      observer.disconnect();
     };
   }, []);
 
@@ -102,6 +152,35 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
         icon.name.toLowerCase().includes(searchLower)
     );
     setFilteredIcons(filtered);
+  }, [searchValue]);
+
+  // Keyboard shortcut: Cmd+K (Mac) or Ctrl+K (Windows/Linux) to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+      // Handle both lowercase 'k' and uppercase 'K'
+      const isKKey = e.key === 'k' || e.key === 'K';
+      const isModifierPressed = e.metaKey || e.ctrlKey;
+      
+      if (isModifierPressed && isKKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Focus the search input
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          // Select all text if there's any, so user can immediately start typing
+          if (searchValue) {
+            searchInputRef.current.select();
+          }
+        }
+      }
+    };
+
+    // Use capture phase to catch the event early
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
   }, [searchValue]);
 
   const clearSearch = () => {
@@ -163,6 +242,52 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     );
   };
 
+  const handleBackgroundChange = (color: string) => {
+    setBackgroundColor(color);
+    localStorage.setItem('iconBackgroundColor', color);
+    // Note: Complementary color generation is handled by ColorPicker component
+  };
+
+  const handleForegroundChange = (color: string) => {
+    setForegroundColor(color);
+    localStorage.setItem('iconColor', color);
+    document.dispatchEvent(
+      new CustomEvent('iconColorChange', {
+        detail: { color },
+        bubbles: true,
+      })
+    );
+  };
+
+  const handleSwapColors = () => {
+    if (backgroundColor === 'transparent') {
+      // Can't swap if background is transparent
+      return;
+    }
+    const newBg = foregroundColor;
+    const newFg = backgroundColor;
+    setBackgroundColor(newBg);
+    setForegroundColor(newFg);
+    localStorage.setItem('iconBackgroundColor', newBg);
+    localStorage.setItem('iconColor', newFg);
+    document.dispatchEvent(
+      new CustomEvent('iconColorChange', {
+        detail: { color: newFg },
+        bubbles: true,
+      })
+    );
+  };
+
+  // Get colors adjusted for dark mode
+  const getDisplayColors = () => {
+    if (darkMode) {
+      return adjustColorsForDarkMode(backgroundColor, foregroundColor);
+    }
+    return { bg: backgroundColor, fg: foregroundColor };
+  };
+
+  const displayColors = getDisplayColors();
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 space-y-4">
@@ -209,21 +334,15 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               )}
             </div>
 
-            {/* Icon Color */}
+            {/* Colors */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Icon Color</label>
+              <label className="text-sm font-medium">Colors</label>
               <ColorPicker
-                value={iconColor}
-                onChange={(newColor) => {
-                  setIconColor(newColor);
-                  localStorage.setItem('iconColor', newColor);
-                  document.dispatchEvent(
-                    new CustomEvent('iconColorChange', {
-                      detail: { color: newColor },
-                      bubbles: true,
-                    })
-                  );
-                }}
+                backgroundValue={backgroundColor}
+                foregroundValue={foregroundColor}
+                onBackgroundChange={handleBackgroundChange}
+                onForegroundChange={handleForegroundChange}
+                onSwap={handleSwapColors}
               />
             </div>
 
@@ -233,7 +352,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               <Dropdown
                 trigger={
                   <Button variant="outline" size="sm" className="w-full justify-between">
-                    {copyFormat === 'text' ? 'SVG Text' : 'PNG'}
+                    {copyFormat === 'text' ? 'SVG' : 'PNG'}
                     <svg
                       className="ml-2 h-4 w-4"
                       fill="none"
@@ -255,7 +374,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                   onClick={() => handleFormatChange('text')}
                   className={copyFormat === 'text' ? 'bg-accent' : ''}
                 >
-                  SVG Text
+                  SVG
                 </DropdownItem>
                 <DropdownItem
                   onClick={() => handleFormatChange('png')}
@@ -268,7 +387,8 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
 
             {/* Padding Settings */}
             <PaddingSettings
-              iconColor={iconColor}
+              iconColor={displayColors.fg}
+              backgroundColor={displayColors.bg}
               value={iconPadding}
               onChange={handlePaddingChange}
             />
@@ -293,8 +413,9 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               </svg>
             </div>
             <Input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search icons..."
+              placeholder={`Search icons... (${shortcutKey})`}
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               className="w-full pl-10 pr-10"
@@ -332,7 +453,8 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
             IconComponent={icon.component}
             iconName={icon.name}
             displayName={icon.displayName}
-            iconColor={iconColor}
+            iconColor={displayColors.fg}
+            backgroundColor={displayColors.bg}
             copyFormat={copyFormat}
             displaySize={DISPLAY_SIZE}
             copySize={iconSize}
