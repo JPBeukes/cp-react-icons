@@ -1,17 +1,56 @@
 /**
- * Copy SVG string to clipboard
+ * Ensure SVG has proper XML declaration and namespace for clipboard compatibility
+ */
+function prepareSvgForClipboard(svg: string): string {
+  // Check if SVG already has XML declaration
+  if (!svg.trim().startsWith('<?xml')) {
+    // Add XML declaration if missing
+    svg = '<?xml version="1.0" encoding="UTF-8"?>' + svg;
+  }
+  
+  // Ensure SVG has proper namespace if missing
+  if (!svg.includes('xmlns=') && !svg.includes('xmlns:')) {
+    // Add xmlns if the SVG element doesn't have it
+    svg = svg.replace(/<svg([^>]*)>/, '<svg$1 xmlns="http://www.w3.org/2000/svg">');
+  }
+  
+  return svg;
+}
+
+/**
+ * Copy SVG string to clipboard as a file (not just text)
+ * Attempts to copy as SVG file using ClipboardItem API, falls back to text copy
  */
 export async function copySvgToClipboard(svg: string): Promise<void> {
   try {
-    // Use the modern Clipboard API if available
+    // Prepare SVG with proper XML format
+    const preparedSvg = prepareSvgForClipboard(svg);
+    
+    // Try to copy as SVG file using ClipboardItem API (Chrome 90+, Edge)
+    if (navigator.clipboard && navigator.clipboard.write && window.isSecureContext) {
+      try {
+        const svgBlob = new Blob([preparedSvg], { type: 'image/svg+xml' });
+        const clipboardItem = new ClipboardItem({
+          'image/svg+xml': Promise.resolve(svgBlob),
+        });
+        
+        await navigator.clipboard.write([clipboardItem]);
+        return; // Successfully copied as file
+      } catch (fileCopyError) {
+        // File copy not supported, fall through to text copy
+        console.log('SVG file copy not supported, falling back to text copy:', fileCopyError);
+      }
+    }
+    
+    // Fallback: Copy as text
     if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(svg);
+      await navigator.clipboard.writeText(preparedSvg);
       return;
     }
     
     // Fallback for older browsers
     const textArea = document.createElement('textarea');
-    textArea.value = svg;
+    textArea.value = preparedSvg;
     textArea.style.position = 'fixed';
     textArea.style.left = '-999999px';
     textArea.style.top = '-999999px';
@@ -75,7 +114,7 @@ export async function copySvgFileToClipboard(svg: string, filename: string = 'ic
   }
 
   // Fallback: Convert SVG to PNG and copy that
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const img = new Image();
     const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);

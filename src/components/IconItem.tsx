@@ -12,6 +12,7 @@ interface IconItemProps {
   copyFormat: 'text' | 'png';
   displaySize?: number;
   copySize?: number;
+  padding?: number;
 }
 
 export default function IconItem({
@@ -22,11 +23,13 @@ export default function IconItem({
   copyFormat,
   displaySize = 64,
   copySize = 64,
+  padding = 0,
 }: IconItemProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
   const [currentFormat, setCurrentFormat] = useState(copyFormat);
   const [currentCopySize, setCurrentCopySize] = useState(copySize);
+  const [currentPadding, setCurrentPadding] = useState(padding);
 
   useEffect(() => {
     // Listen for format changes
@@ -62,6 +65,23 @@ export default function IconItem({
     setCurrentCopySize(copySize);
   }, [copySize]);
 
+  // Listen for padding changes
+  useEffect(() => {
+    const handlePaddingChange = ((e: CustomEvent) => {
+      setCurrentPadding(e.detail.padding);
+    }) as EventListener;
+
+    document.addEventListener('iconPaddingChange', handlePaddingChange);
+    return () => {
+      document.removeEventListener('iconPaddingChange', handlePaddingChange);
+    };
+  }, []);
+
+  // Update padding when prop changes
+  useEffect(() => {
+    setCurrentPadding(padding);
+  }, [padding]);
+
   const handleClick = async () => {
     try {
       if (!iconRef.current) return;
@@ -70,7 +90,8 @@ export default function IconItem({
         iconRef.current,
         iconColor,
         'transparent',
-        copySize
+        copySize,
+        currentPadding
       );
 
       if (svgString) {
@@ -81,9 +102,9 @@ export default function IconItem({
             await copySvgAsPng(svgString, copySize);
             formatName = 'PNG image';
           } else {
-            // Copy as SVG text
+            // Copy as SVG file (now uses ClipboardItem API)
             await copySvgToClipboard(svgString);
-            formatName = 'SVG text';
+            formatName = 'SVG file';
           }
 
           // Show success toast

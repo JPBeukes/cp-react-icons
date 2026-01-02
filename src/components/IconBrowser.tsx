@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import ColorPicker from './ColorPicker';
 import { Dropdown, DropdownItem } from './ui/dropdown';
 import { Button } from './ui/button';
+import PaddingSettings from './PaddingSettings';
 
 interface IconBrowserProps {
   initialColor?: string;
@@ -14,6 +15,7 @@ const DEFAULT_SIZES = [64, 128, 512, 1024];
 const DISPLAY_SIZE = 64; // Fixed size for gallery display
 
 const DEFAULT_COLOR = '#64748b'; // rgb(100, 116, 139)
+const DEFAULT_PADDING = 0.10; // 10% padding (Medium preset)
 
 export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowserProps) {
   const [searchValue, setSearchValue] = useState('');
@@ -22,6 +24,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const [iconSize, setIconSize] = useState<number>(64);
   const [customSize, setCustomSize] = useState<string>('');
   const [showCustomSize, setShowCustomSize] = useState(false);
+  const [iconPadding, setIconPadding] = useState<number>(DEFAULT_PADDING);
   const [filteredIcons, setFilteredIcons] = useState<typeof featherIcons>([]);
 
   useEffect(() => {
@@ -54,6 +57,15 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
           setShowCustomSize(true);
           setCustomSize(size.toString());
         }
+      }
+    }
+
+    // Load saved padding
+    const savedPadding = localStorage.getItem('iconPadding');
+    if (savedPadding) {
+      const padding = parseFloat(savedPadding);
+      if (!isNaN(padding) && padding >= 0 && padding <= 0.5) {
+        setIconPadding(padding);
       }
     }
 
@@ -140,13 +152,24 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     }
   };
 
+  const handlePaddingChange = (padding: number) => {
+    setIconPadding(padding);
+    localStorage.setItem('iconPadding', padding.toString());
+    document.dispatchEvent(
+      new CustomEvent('iconPaddingChange', {
+        detail: { padding },
+        bubbles: true,
+      })
+    );
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 space-y-4">
         <div className="flex flex-col gap-4 p-4 border rounded-lg bg-card">
           <h3 className="text-lg font-semibold">Settings</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Icon Size */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Icon Size (px)</label>
@@ -242,6 +265,13 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                 </DropdownItem>
               </Dropdown>
             </div>
+
+            {/* Padding Settings */}
+            <PaddingSettings
+              iconColor={iconColor}
+              value={iconPadding}
+              onChange={handlePaddingChange}
+            />
           </div>
         </div>
 
@@ -306,6 +336,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
             copyFormat={copyFormat}
             displaySize={DISPLAY_SIZE}
             copySize={iconSize}
+            padding={iconPadding}
           />
         ))}
       </div>
