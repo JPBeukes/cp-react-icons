@@ -408,6 +408,19 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
           {/* Settings Section */}
           <CollapsibleSection title="Settings" defaultOpen={true}>
             <div className="flex flex-col gap-4">
+              {/* Colors */}
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-center">
+                  <ColorPicker
+                    backgroundValue={backgroundColor}
+                    foregroundValue={foregroundColor}
+                    onBackgroundChange={handleBackgroundChange}
+                    onForegroundChange={handleForegroundChange}
+                    onSwap={handleSwapColors}
+                  />
+                </div>
+              </div>
+
               {/* Icon Size */}
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-muted-foreground">Icon Size (px)</label>
@@ -443,19 +456,6 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                     className="h-8 text-sm"
                   />
                 )}
-              </div>
-
-              {/* Colors */}
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-center">
-                  <ColorPicker
-                    backgroundValue={backgroundColor}
-                    foregroundValue={foregroundColor}
-                    onBackgroundChange={handleBackgroundChange}
-                    onForegroundChange={handleForegroundChange}
-                    onSwap={handleSwapColors}
-                  />
-                </div>
               </div>
 
               {/* Copy Format */}

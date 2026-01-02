@@ -28,38 +28,27 @@ export default function IconPreview({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-center p-2">
         <div
-          className="relative border-2 border-dashed border-muted-foreground/30 rounded"
+          className="relative border-2 border-dashed border-muted-foreground/30 rounded bg-muted/30"
           style={{
             width: `${containerSize}px`,
             height: `${containerSize}px`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
-            backgroundImage: backgroundColor === 'transparent' 
-              ? `linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
-                 linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
-                 linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
-                 linear-gradient(-45deg, transparent 75%, #e0e0e0 75%)`
-              : undefined,
-            backgroundSize: backgroundColor === 'transparent' ? '12px 12px' : undefined,
-            backgroundPosition: backgroundColor === 'transparent' 
-              ? '0 0, 0 6px, 6px -6px, -6px 0px' 
-              : undefined,
           }}
         >
-          {/* Padding visualization - shows the padding area around the icon */}
-          {padding > 0 && (
-            <div
-              className="absolute rounded"
-              style={{
-                width: `${iconContainerSize}px`,
-                height: `${iconContainerSize}px`,
-                backgroundColor: 'rgba(59, 130, 246, 0.1)', // blue-500 with opacity
-                border: '1px dashed rgba(59, 130, 246, 0.3)',
-              }}
-            />
-          )}
+          {/* Preview background - shows the actual background color */}
+          <div
+            className="absolute rounded border border-muted-foreground/30"
+            style={{
+              width: `${iconContainerSize}px`,
+              height: `${iconContainerSize}px`,
+              backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          />
           
           {/* Icon container */}
           <div
@@ -72,17 +61,6 @@ export default function IconPreview({
             }}
           >
             <FiBox size={iconSize} color={iconColor} />
-          </div>
-
-          {/* Percentage label in bottom right corner */}
-          <div
-            className="absolute bottom-1 right-1 text-xs font-medium text-muted-foreground bg-background/90 backdrop-blur-sm px-1.5 py-0.5 rounded border border-border/50"
-            style={{
-              bottom: '4px',
-              right: '4px',
-            }}
-          >
-            {(padding * 100).toFixed(1)}%
           </div>
         </div>
       </div>
