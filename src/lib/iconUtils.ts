@@ -2,13 +2,15 @@
  * Generate SVG string from a rendered icon element with applied colors
  * This function extracts the SVG from a DOM element and applies colors
  * @param padding - Padding percentage (0-0.5, e.g., 0.1 for 10% padding)
+ * @param cornerRadius - Corner radius percentage (0-50, e.g., 50 for fully rounded/circle)
  */
 export function getSvgStringFromElement(
   iconElement: HTMLElement | null,
   iconColor: string = '#000000',
   bgColor: string = 'transparent',
   size: number = 64,
-  padding: number = 0
+  padding: number = 0,
+  cornerRadius: number = 0
 ): string | null {
   if (!iconElement) return null;
   
@@ -22,6 +24,21 @@ export function getSvgStringFromElement(
   // Set size attributes
   clonedSvg.setAttribute('width', size.toString());
   clonedSvg.setAttribute('height', size.toString());
+  
+  // Remove any color-related attributes from the SVG element itself
+  // These will be overridden by the applyColor function on child elements
+  clonedSvg.removeAttribute('color');
+  const svgStyle = clonedSvg.getAttribute('style');
+  if (svgStyle) {
+    const cleanedStyle = svgStyle
+      .replace(/color\s*:\s*[^;]+;?/gi, '')
+      .trim();
+    if (cleanedStyle) {
+      clonedSvg.setAttribute('style', cleanedStyle);
+    } else {
+      clonedSvg.removeAttribute('style');
+    }
+  }
   
   // Get or set default viewBox (react-icons usually has viewBox="0 0 24 24")
   let viewBox = clonedSvg.getAttribute('viewBox');
@@ -57,31 +74,53 @@ export function getSvgStringFromElement(
   // Apply icon color to all paths and other elements FIRST
   // This ensures colors are applied before we add background elements
   const applyColor = (element: Element) => {
-    // For react-icons Feather icons, paths typically use stroke, NOT fill
-    // Apply stroke color to all shape elements
-    const strokeValue = element.getAttribute('stroke');
-    if (strokeValue === null || strokeValue === '' || strokeValue === 'currentColor') {
-      // No stroke or currentColor - set it to icon color
-      element.setAttribute('stroke', iconColor);
-    } else if (strokeValue !== 'none') {
-      // Stroke exists and is not 'none' - override with icon color
-      element.setAttribute('stroke', iconColor);
-    }
+    // Get the tag name to determine if this is a shape element
+    const tagName = element.tagName.toLowerCase();
+    const isShapeElement = ['path', 'circle', 'rect', 'ellipse', 'line', 'polyline', 'polygon'].includes(tagName);
+    const isGroup = tagName === 'g';
     
-    // Only apply fill if the element already has a fill attribute
-    // Feather icons don't use fill, so we shouldn't add it if it doesn't exist
-    const fillValue = element.getAttribute('fill');
-    if (fillValue !== null) {
-      // Element has a fill attribute - only override if it's not 'none' or 'transparent'
-      if (fillValue !== 'none' && fillValue !== 'transparent' && fillValue !== '') {
-        // Override existing fill with icon color
+    if (isShapeElement || isGroup) {
+      const strokeValue = element.getAttribute('stroke');
+      const fillValue = element.getAttribute('fill');
+      
+      // Apply stroke color (for Feather icons and other stroke-based icons)
+      // Override stroke unless it's explicitly set to 'none'
+      if (strokeValue !== null && strokeValue !== 'none') {
+        element.setAttribute('stroke', iconColor);
+      }
+      
+      // Apply fill color (for Phosphor icons and other fill-based icons)
+      // Always override fill if it exists (even if it's a hardcoded color like #6b7280)
+      // This ensures Phosphor icons get the correct color
+      if (fillValue !== null) {
+        // Override any existing fill value with icon color
+        // This handles: fill="#6b7280", fill="currentColor", fill="black", etc.
         element.setAttribute('fill', iconColor);
-      } else if (fillValue === 'currentColor') {
-        // Replace currentColor with actual color
-        element.setAttribute('fill', iconColor);
+      } else if (isShapeElement) {
+        // If fill doesn't exist and this is a shape element, add fill
+        // This handles Phosphor icons that might not have fill set initially
+        // Only do this if stroke is not being used (stroke is 'none' or doesn't exist)
+        if (strokeValue === null || strokeValue === '' || strokeValue === 'none') {
+          element.setAttribute('fill', iconColor);
+        }
+      }
+      
+      // Remove any style attributes that might contain color overrides
+      const styleAttr = element.getAttribute('style');
+      if (styleAttr) {
+        // Remove color, stroke, and fill from style
+        const cleanedStyle = styleAttr
+          .replace(/color\s*:\s*[^;]+;?/gi, '')
+          .replace(/stroke\s*:\s*[^;]+;?/gi, '')
+          .replace(/fill\s*:\s*[^;]+;?/gi, '')
+          .trim();
+        if (cleanedStyle) {
+          element.setAttribute('style', cleanedStyle);
+        } else {
+          element.removeAttribute('style');
+        }
       }
     }
-    // If no fill attribute exists, don't add one (Feather icons use stroke only)
     
     // Recursively apply to children
     Array.from(element.children).forEach(applyColor);
@@ -91,18 +130,53 @@ export function getSvgStringFromElement(
   // This ensures icon colors are set correctly
   Array.from(clonedSvg.children).forEach(applyColor);
   
+  // Calculate corner radius in viewBox units
+  const containerSize = Math.min(expandedViewBox.width, expandedViewBox.height);
+  const radiusInViewBox = (containerSize * cornerRadius) / 100;
+  
+  // Apply corner radius clipping if needed
+  if (cornerRadius > 0) {
+    // Create a clipPath for rounded corners
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const clipPath = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+    clipPath.setAttribute('id', 'rounded-corner-clip');
+    const clipRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    clipRect.setAttribute('x', expandedViewBox.x.toString());
+    clipRect.setAttribute('y', expandedViewBox.y.toString());
+    clipRect.setAttribute('width', expandedViewBox.width.toString());
+    clipRect.setAttribute('height', expandedViewBox.height.toString());
+    clipRect.setAttribute('rx', radiusInViewBox.toString());
+    clipRect.setAttribute('ry', radiusInViewBox.toString());
+    clipPath.appendChild(clipRect);
+    defs.appendChild(clipPath);
+    clonedSvg.insertBefore(defs, clonedSvg.firstChild);
+    
+    // Apply clipPath to the entire SVG
+    clonedSvg.setAttribute('clip-path', 'url(#rounded-corner-clip)');
+  }
+
   // NOW add background elements (after colors are applied to icon)
   // Apply background color FIRST (before any icon content) if needed
   // This ensures the background is rendered behind the icon
   if (bgColor !== 'transparent') {
+    // Create rounded rectangle using a path or rect with rx/ry
     const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     bgRect.setAttribute('x', expandedViewBox.x.toString());
     bgRect.setAttribute('y', expandedViewBox.y.toString());
     bgRect.setAttribute('width', expandedViewBox.width.toString());
     bgRect.setAttribute('height', expandedViewBox.height.toString());
+    bgRect.setAttribute('rx', radiusInViewBox.toString());
+    bgRect.setAttribute('ry', radiusInViewBox.toString());
     bgRect.setAttribute('fill', bgColor);
-    // Insert at the very beginning, before any icon content
-    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+    // Insert after defs (if exists) but before icon content
+    const defs = clonedSvg.querySelector('defs');
+    if (defs && defs.nextSibling) {
+      clonedSvg.insertBefore(bgRect, defs.nextSibling);
+    } else if (defs) {
+      clonedSvg.insertBefore(bgRect, clonedSvg.firstChild?.nextSibling || null);
+    } else {
+      clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+    }
   }
   
   // Add invisible border rectangle AFTER background (if padding exists)
@@ -113,15 +187,24 @@ export function getSvgStringFromElement(
     borderRect.setAttribute('y', expandedViewBox.y.toString());
     borderRect.setAttribute('width', expandedViewBox.width.toString());
     borderRect.setAttribute('height', expandedViewBox.height.toString());
+    borderRect.setAttribute('rx', radiusInViewBox.toString());
+    borderRect.setAttribute('ry', radiusInViewBox.toString());
     borderRect.setAttribute('fill', '#ffffff');
     borderRect.setAttribute('opacity', '0.001');
     // Insert after background (if exists) but before icon content
-    // If background was inserted, it's now firstChild, so insert border after it
-    // Otherwise, insert at the beginning
-    const insertBefore = bgColor !== 'transparent' 
-      ? clonedSvg.firstChild?.nextSibling
-      : clonedSvg.firstChild;
-    clonedSvg.insertBefore(borderRect, insertBefore);
+    // If background was inserted, it's now after defs, so insert border after it
+    // Otherwise, insert after defs (if exists) or at the beginning
+    const defs = clonedSvg.querySelector('defs');
+    const bgRect = clonedSvg.querySelector('rect[fill]:not([opacity="0.001"])');
+    if (bgRect && bgRect.nextSibling) {
+      clonedSvg.insertBefore(borderRect, bgRect.nextSibling);
+    } else if (defs && defs.nextSibling) {
+      clonedSvg.insertBefore(borderRect, defs.nextSibling);
+    } else if (defs) {
+      clonedSvg.insertBefore(borderRect, clonedSvg.firstChild?.nextSibling || null);
+    } else {
+      clonedSvg.insertBefore(borderRect, clonedSvg.firstChild);
+    }
   }
   
   return clonedSvg.outerHTML;

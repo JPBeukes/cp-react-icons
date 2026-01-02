@@ -6,6 +6,7 @@ import ColorPicker from './ColorPicker';
 import { Dropdown, DropdownItem } from './ui/dropdown';
 import { Button } from './ui/button';
 import PaddingSettings from './PaddingSettings';
+import CornerRadiusSettings from './CornerRadiusSettings';
 import IconPackSelectorSidebar from './IconPackSelectorSidebar';
 import { Pagination } from './ui/pagination';
 import IconPreview from './IconPreview';
@@ -21,6 +22,7 @@ const DISPLAY_SIZE = 32; // Fixed size for gallery display
 
 const DEFAULT_COLOR = '#64748b'; // rgb(100, 116, 139)
 const DEFAULT_PADDING = 0.10; // 10% padding (Medium preset)
+const DEFAULT_CORNER_RADIUS = 0; // 0% corner radius (None preset)
 const ITEMS_PER_PAGE = 80; // Number of icons per page
 
 export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowserProps) {
@@ -32,6 +34,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const [customSize, setCustomSize] = useState<string>('');
   const [showCustomSize, setShowCustomSize] = useState(false);
   const [iconPadding, setIconPadding] = useState<number>(DEFAULT_PADDING);
+  const [cornerRadius, setCornerRadius] = useState<number>(DEFAULT_CORNER_RADIUS);
   const [filteredIcons, setFilteredIcons] = useState<IconMetadata[]>([]);
   const [selectedPacks, setSelectedPacks] = useState<string[]>(availablePackIds);
   const [darkMode, setDarkMode] = useState(false);
@@ -104,6 +107,15 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
       const padding = parseFloat(savedPadding);
       if (!isNaN(padding) && padding >= 0 && padding <= 0.5) {
         setIconPadding(padding);
+      }
+    }
+
+    // Load saved corner radius
+    const savedCornerRadius = localStorage.getItem('iconCornerRadius');
+    if (savedCornerRadius) {
+      const radius = parseFloat(savedCornerRadius);
+      if (!isNaN(radius) && radius >= 0 && radius <= 50) {
+        setCornerRadius(radius);
       }
     }
 
@@ -277,6 +289,17 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     document.dispatchEvent(
       new CustomEvent('iconPaddingChange', {
         detail: { padding },
+        bubbles: true,
+      })
+    );
+  };
+
+  const handleCornerRadiusChange = (radius: number) => {
+    setCornerRadius(radius);
+    localStorage.setItem('iconCornerRadius', radius.toString());
+    document.dispatchEvent(
+      new CustomEvent('iconCornerRadiusChange', {
+        detail: { radius },
         bubbles: true,
       })
     );
@@ -502,6 +525,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                 value={iconPadding}
                 onChange={handlePaddingChange}
               />
+
+              {/* Corner Radius Settings */}
+              <CornerRadiusSettings
+                value={cornerRadius}
+                onChange={handleCornerRadiusChange}
+              />
             </div>
           </CollapsibleSection>
 
@@ -511,6 +540,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               iconColor={displayColors.fg}
               backgroundColor={displayColors.bg}
               padding={iconPadding}
+              cornerRadius={cornerRadius}
             />
           </CollapsibleSection>
         </div>
@@ -532,6 +562,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                 displaySize={DISPLAY_SIZE}
                 copySize={iconSize}
                 padding={iconPadding}
+                cornerRadius={cornerRadius}
               />
             ))}
           </div>

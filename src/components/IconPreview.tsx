@@ -5,6 +5,7 @@ interface IconPreviewProps {
   iconColor: string;
   backgroundColor?: string;
   padding: number;
+  cornerRadius?: number;
   iconSize?: number;
 }
 
@@ -15,6 +16,7 @@ export default function IconPreview({
   iconColor, 
   backgroundColor = 'transparent', 
   padding,
+  cornerRadius = 0,
   iconSize = PREVIEW_ICON_SIZE
 }: IconPreviewProps) {
   const previewIconRef = useRef<HTMLDivElement>(null);
@@ -23,6 +25,9 @@ export default function IconPreview({
   const paddingPx = iconSize * padding;
   const containerSize = PREVIEW_SIZE;
   const iconContainerSize = iconSize + (paddingPx * 2);
+  
+  // Calculate corner radius in pixels (percentage of container size)
+  const cornerRadiusPx = (iconContainerSize * cornerRadius) / 100;
 
   return (
     <div className="flex flex-col gap-2">
@@ -39,11 +44,12 @@ export default function IconPreview({
         >
           {/* Preview background - shows the actual background color */}
           <div
-            className="absolute rounded border border-muted-foreground/30"
+            className="absolute border border-muted-foreground/30"
             style={{
               width: `${iconContainerSize}px`,
               height: `${iconContainerSize}px`,
               backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
+              borderRadius: `${cornerRadiusPx}px`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -14,6 +14,7 @@ interface IconItemProps {
   displaySize?: number;
   copySize?: number;
   padding?: number;
+  cornerRadius?: number;
 }
 
 export default function IconItem({
@@ -26,12 +27,14 @@ export default function IconItem({
   displaySize = 64,
   copySize = 64,
   padding = 0,
+  cornerRadius = 0,
 }: IconItemProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
   const [currentFormat, setCurrentFormat] = useState(copyFormat);
   const [currentCopySize, setCurrentCopySize] = useState(copySize);
   const [currentPadding, setCurrentPadding] = useState(padding);
+  const [currentCornerRadius, setCurrentCornerRadius] = useState(cornerRadius);
 
   useEffect(() => {
     // Listen for format changes
@@ -84,6 +87,23 @@ export default function IconItem({
     setCurrentPadding(padding);
   }, [padding]);
 
+  // Listen for corner radius changes
+  useEffect(() => {
+    const handleCornerRadiusChange = ((e: CustomEvent) => {
+      setCurrentCornerRadius(e.detail.radius);
+    }) as EventListener;
+
+    document.addEventListener('iconCornerRadiusChange', handleCornerRadiusChange);
+    return () => {
+      document.removeEventListener('iconCornerRadiusChange', handleCornerRadiusChange);
+    };
+  }, []);
+
+  // Update corner radius when prop changes
+  useEffect(() => {
+    setCurrentCornerRadius(cornerRadius);
+  }, [cornerRadius]);
+
   const handleClick = async () => {
     try {
       if (!iconRef.current) return;
@@ -93,7 +113,8 @@ export default function IconItem({
         iconColor,
         backgroundColor,
         copySize,
-        currentPadding
+        currentPadding,
+        currentCornerRadius
       );
 
       if (svgString) {
@@ -175,7 +196,7 @@ export default function IconItem({
     >
       <div className="flex flex-col items-center gap-1.5">
         <div
-          className="flex items-center justify-center rounded"
+          className="flex items-center justify-center"
           style={{ 
             width: `${displaySize}px`, 
             height: `${displaySize}px`,
