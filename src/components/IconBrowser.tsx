@@ -18,7 +18,7 @@ const DEFAULT_COLOR = '#64748b'; // rgb(100, 116, 139)
 export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowserProps) {
   const [searchValue, setSearchValue] = useState('');
   const [iconColor, setIconColor] = useState(initialColor);
-  const [copyFormat, setCopyFormat] = useState<'text' | 'png' | 'jpg'>('text');
+  const [copyFormat, setCopyFormat] = useState<'text' | 'png'>('text');
   const [iconSize, setIconSize] = useState<number>(64);
   const [customSize, setCustomSize] = useState<string>('');
   const [showCustomSize, setShowCustomSize] = useState(false);
@@ -35,9 +35,13 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     }
 
     // Load saved copy format
-    const savedFormat = localStorage.getItem('copyFormat') as 'text' | 'png' | 'jpg' | null;
-    if (savedFormat === 'text' || savedFormat === 'png' || savedFormat === 'jpg') {
+    const savedFormat = localStorage.getItem('copyFormat') as 'text' | 'png' | null;
+    if (savedFormat === 'text' || savedFormat === 'png') {
       setCopyFormat(savedFormat);
+    } else if (savedFormat === 'jpg') {
+      // Migrate old JPG preference to PNG
+      setCopyFormat('png');
+      localStorage.setItem('copyFormat', 'png');
     }
 
     // Load saved icon size
@@ -92,7 +96,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     setSearchValue('');
   };
 
-  const handleFormatChange = (format: 'text' | 'png' | 'jpg') => {
+  const handleFormatChange = (format: 'text' | 'png') => {
     setCopyFormat(format);
     localStorage.setItem('copyFormat', format);
     // Dispatch event so IconItems can update
@@ -206,7 +210,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               <Dropdown
                 trigger={
                   <Button variant="outline" size="sm" className="w-full justify-between">
-                    {copyFormat === 'text' ? 'SVG Text' : copyFormat === 'png' ? 'PNG' : 'JPG'}
+                    {copyFormat === 'text' ? 'SVG Text' : 'PNG'}
                     <svg
                       className="ml-2 h-4 w-4"
                       fill="none"
@@ -235,12 +239,6 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
                   className={copyFormat === 'png' ? 'bg-accent' : ''}
                 >
                   PNG
-                </DropdownItem>
-                <DropdownItem
-                  onClick={() => handleFormatChange('jpg')}
-                  className={copyFormat === 'jpg' ? 'bg-accent' : ''}
-                >
-                  JPG
                 </DropdownItem>
               </Dropdown>
             </div>

@@ -1,6 +1,6 @@
 # Icon Browser
 
-A simple icon browser for copying React icons (Feather icons) as PNG, JPEG, or SVG with customizable resolution and colors.
+A simple icon browser for copying React icons (Feather icons) as PNG or SVG with customizable resolution and colors.
 
 ## Development
 

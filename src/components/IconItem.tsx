@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { IconType } from 'react-icons';
 import { getSvgStringFromElement } from '@/lib/iconUtils';
-import { copySvgToClipboard, copySvgAsPng, copySvgAsJpg } from '@/lib/clipboard';
+import { copySvgToClipboard, copySvgAsPng } from '@/lib/clipboard';
 import { toast } from 'sonner';
 
 interface IconItemProps {
@@ -9,7 +9,7 @@ interface IconItemProps {
   iconName: string;
   displayName: string;
   iconColor: string;
-  copyFormat: 'text' | 'png' | 'jpg';
+  copyFormat: 'text' | 'png';
   displaySize?: number;
   copySize?: number;
 }
@@ -80,10 +80,6 @@ export default function IconItem({
             // Copy as PNG image
             await copySvgAsPng(svgString, copySize);
             formatName = 'PNG image';
-          } else if (currentFormat === 'jpg') {
-            // Copy as JPG image
-            await copySvgAsJpg(svgString, copySize);
-            formatName = 'JPG image';
           } else {
             // Copy as SVG text
             await copySvgToClipboard(svgString);
@@ -133,7 +129,7 @@ export default function IconItem({
     }
   };
 
-  const formatLabel = currentFormat === 'png' ? 'png' : currentFormat === 'jpg' ? 'jpg' : 'svg';
+  const formatLabel = currentFormat === 'png' ? 'png' : 'svg';
   const sizeLabel = `${currentCopySize}px`;
 
   return (
