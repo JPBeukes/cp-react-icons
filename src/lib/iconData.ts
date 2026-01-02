@@ -2,6 +2,8 @@
 import * as FiIcons from 'react-icons/fi';
 // Import all Phosphor icons from react-icons/pi
 import * as PiIcons from 'react-icons/pi';
+// Import all Font Awesome 6 icons from react-icons/fa6
+import * as Fa6Icons from 'react-icons/fa6';
 import type { IconType } from 'react-icons';
 
 // Create icon metadata array
@@ -24,19 +26,29 @@ export interface IconPackMetadata {
 function createIconPack(
   id: string,
   name: string,
-  prefix: string,
+  prefix: string | string[],
   iconModule: any
 ): IconPackMetadata {
-  // Get all icon names from the icon module
+  // Handle both single prefix and multiple prefixes
+  const prefixes = Array.isArray(prefix) ? prefix : [prefix];
+  // Sort prefixes by length (longest first) to match longer prefixes before shorter ones
+  // This ensures "FaBrands" matches before "Fa"
+  const sortedPrefixes = [...prefixes].sort((a, b) => b.length - a.length);
+  
+  // Get all icon names from the icon module that match any of the prefixes
   const iconNames = Object.keys(iconModule).filter(
-    (key) => key.startsWith(prefix) && typeof iconModule[key] === 'function'
+    (key) => {
+      const matchesPrefix = sortedPrefixes.some(p => key.startsWith(p));
+      return matchesPrefix && typeof iconModule[key] === 'function';
+    }
   );
 
   // Create metadata array
   const icons: IconMetadata[] = iconNames.map((iconName) => {
     const Component = iconModule[iconName];
-    // Convert "FiActivity" to "Activity" for display, "PiActivity" to "Activity"
-    const displayName = iconName.replace(new RegExp(`^${prefix}`), '');
+    // Find which prefix matches (checking longest first) and remove it for display name
+    const matchedPrefix = sortedPrefixes.find(p => iconName.startsWith(p)) || sortedPrefixes[0];
+    const displayName = iconName.replace(new RegExp(`^${matchedPrefix}`), '');
     
     return {
       name: iconName,
@@ -52,7 +64,7 @@ function createIconPack(
   return {
     id,
     name,
-    prefix,
+    prefix: Array.isArray(prefix) ? prefix.join(', ') : prefix,
     icons,
   };
 }
@@ -60,11 +72,19 @@ function createIconPack(
 // Create icon packs
 const featherPack = createIconPack('feather', 'Feather Icons', 'Fi', FiIcons);
 const phosphorPack = createIconPack('phosphor', 'Phosphor Icons', 'Pi', PiIcons);
+// Font Awesome 6 uses multiple prefixes: Fa, FaBrands, FaRegular, FaSolid
+const fa6Pack = createIconPack(
+  'fa6',
+  'Font Awesome 6',
+  ['Fa', 'FaBrands', 'FaRegular', 'FaSolid'],
+  Fa6Icons
+);
 
 // Export icon packs as a record
 export const iconPacks: Record<string, IconPackMetadata> = {
   feather: featherPack,
   phosphor: phosphorPack,
+  fa6: fa6Pack,
 };
 
 // Get all available pack IDs
