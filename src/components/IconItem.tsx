@@ -155,29 +155,30 @@ export default function IconItem({
   const formatLabel = currentFormat === 'png' ? 'png' : 'svg';
   const sizeLabel = `${currentCopySize}px`;
 
+  // Truncate text in the middle if too long
+  const truncateMiddle = (text: string, maxLength: number = 17): string => {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    // Show roughly equal parts at start and end (e.g., "Address...Duotone")
+    const availableLength = maxLength - 3; // Subtract 3 for "..."
+    const startLength = Math.floor(availableLength / 2);
+    const endLength = availableLength - startLength;
+    return `${text.slice(0, startLength)}...${text.slice(-endLength)}`;
+  };
+
   return (
     <div
       ref={containerRef}
-      className="icon-item group cursor-pointer p-4 border rounded-lg hover:border-primary hover:shadow-md transition-all relative"
+      className="icon-item group cursor-pointer p-2 border rounded-lg bg-white hover:border-primary hover:shadow-md transition-all relative"
       onClick={handleClick}
     >
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-1.5">
         <div
           className="flex items-center justify-center rounded"
           style={{ 
             width: `${displaySize}px`, 
             height: `${displaySize}px`,
-            backgroundColor: backgroundColor === 'transparent' ? 'transparent' : backgroundColor,
-            backgroundImage: backgroundColor === 'transparent' 
-              ? `linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
-                 linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
-                 linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
-                 linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)`
-              : undefined,
-            backgroundSize: backgroundColor === 'transparent' ? '8px 8px' : undefined,
-            backgroundPosition: backgroundColor === 'transparent' 
-              ? '0 0, 0 4px, 4px -4px, -4px 0px' 
-              : undefined,
           }}
         >
           <div
@@ -186,14 +187,14 @@ export default function IconItem({
             style={{ color: iconColor }}
           >
             {IconComponent ? (
-              <IconComponent size={displaySize} color={iconColor} />
+              <IconComponent size={displaySize} color="#6b7280" />
             ) : (
               <div className="w-full h-full bg-muted animate-pulse rounded" />
             )}
           </div>
         </div>
-        <span className="text-xs text-muted-foreground text-center">
-          {displayName}
+        <span className="text-xs text-muted-foreground text-center truncate w-full" title={displayName}>
+          {truncateMiddle(displayName)}
         </span>
       </div>
       {/* Hover label showing copy mode and size */}

@@ -52,11 +52,62 @@ export function getSvgStringFromElement(
     expandedViewBox.height = height + (paddingAmount * 2);
     
     clonedSvg.setAttribute('viewBox', `${expandedViewBox.x} ${expandedViewBox.y} ${expandedViewBox.width} ${expandedViewBox.height}`);
+  }
+  
+  // Apply icon color to all paths and other elements FIRST
+  // This ensures colors are applied before we add background elements
+  const applyColor = (element: Element) => {
+    // For react-icons Feather icons, paths typically use stroke, NOT fill
+    // Apply stroke color to all shape elements
+    const strokeValue = element.getAttribute('stroke');
+    if (strokeValue === null || strokeValue === '' || strokeValue === 'currentColor') {
+      // No stroke or currentColor - set it to icon color
+      element.setAttribute('stroke', iconColor);
+    } else if (strokeValue !== 'none') {
+      // Stroke exists and is not 'none' - override with icon color
+      element.setAttribute('stroke', iconColor);
+    }
     
-    // Add invisible border rectangle to ensure draw.io respects the full viewBox dimensions
-    // This prevents cropping by defining the full bounds even with transparent background
-    // Using a very small opacity (0.001) so it's technically visible for bounding box calculations
-    // but effectively invisible to the human eye
+    // Only apply fill if the element already has a fill attribute
+    // Feather icons don't use fill, so we shouldn't add it if it doesn't exist
+    const fillValue = element.getAttribute('fill');
+    if (fillValue !== null) {
+      // Element has a fill attribute - only override if it's not 'none' or 'transparent'
+      if (fillValue !== 'none' && fillValue !== 'transparent' && fillValue !== '') {
+        // Override existing fill with icon color
+        element.setAttribute('fill', iconColor);
+      } else if (fillValue === 'currentColor') {
+        // Replace currentColor with actual color
+        element.setAttribute('fill', iconColor);
+      }
+    }
+    // If no fill attribute exists, don't add one (Feather icons use stroke only)
+    
+    // Recursively apply to children
+    Array.from(element.children).forEach(applyColor);
+  };
+  
+  // Apply color to all original icon content BEFORE adding background
+  // This ensures icon colors are set correctly
+  Array.from(clonedSvg.children).forEach(applyColor);
+  
+  // NOW add background elements (after colors are applied to icon)
+  // Apply background color FIRST (before any icon content) if needed
+  // This ensures the background is rendered behind the icon
+  if (bgColor !== 'transparent') {
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', expandedViewBox.x.toString());
+    bgRect.setAttribute('y', expandedViewBox.y.toString());
+    bgRect.setAttribute('width', expandedViewBox.width.toString());
+    bgRect.setAttribute('height', expandedViewBox.height.toString());
+    bgRect.setAttribute('fill', bgColor);
+    // Insert at the very beginning, before any icon content
+    clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+  }
+  
+  // Add invisible border rectangle AFTER background (if padding exists)
+  // This prevents cropping by defining the full bounds even with transparent background
+  if (padding > 0 && padding <= 0.5) {
     const borderRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     borderRect.setAttribute('x', expandedViewBox.x.toString());
     borderRect.setAttribute('y', expandedViewBox.y.toString());
@@ -64,51 +115,14 @@ export function getSvgStringFromElement(
     borderRect.setAttribute('height', expandedViewBox.height.toString());
     borderRect.setAttribute('fill', '#ffffff');
     borderRect.setAttribute('opacity', '0.001');
-    // Insert at the very beginning to ensure it's part of the bounding box calculation
-    clonedSvg.insertBefore(borderRect, clonedSvg.firstChild);
+    // Insert after background (if exists) but before icon content
+    // If background was inserted, it's now firstChild, so insert border after it
+    // Otherwise, insert at the beginning
+    const insertBefore = bgColor !== 'transparent' 
+      ? clonedSvg.firstChild?.nextSibling
+      : clonedSvg.firstChild;
+    clonedSvg.insertBefore(borderRect, insertBefore);
   }
-  
-  // Apply background color if needed
-  if (bgColor !== 'transparent') {
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', expandedViewBox.x.toString());
-    rect.setAttribute('y', expandedViewBox.y.toString());
-    rect.setAttribute('width', expandedViewBox.width.toString());
-    rect.setAttribute('height', expandedViewBox.height.toString());
-    rect.setAttribute('fill', bgColor);
-    clonedSvg.insertBefore(rect, clonedSvg.firstChild);
-  }
-  
-  // Apply icon color to all paths and other elements
-  const applyColor = (element: Element) => {
-    // For react-icons, paths typically use stroke, not fill
-    // Apply stroke color (most Feather icons use stroke)
-    if (element.hasAttribute('stroke')) {
-      const strokeValue = element.getAttribute('stroke');
-      // Only override if it's not 'none' and not already set to a color
-      if (strokeValue !== 'none' && strokeValue !== 'currentColor') {
-        element.setAttribute('stroke', iconColor);
-      } else if (strokeValue === 'currentColor' || !strokeValue) {
-        element.setAttribute('stroke', iconColor);
-      }
-    }
-    
-    // Apply fill color if present
-    if (element.hasAttribute('fill')) {
-      const fillValue = element.getAttribute('fill');
-      if (fillValue !== 'none' && fillValue !== 'currentColor') {
-        element.setAttribute('fill', iconColor);
-      } else if (fillValue === 'currentColor' || !fillValue) {
-        element.setAttribute('fill', iconColor);
-      }
-    }
-    
-    // Recursively apply to children
-    Array.from(element.children).forEach(applyColor);
-  };
-  
-  // Apply color to all child elements
-  Array.from(clonedSvg.children).forEach(applyColor);
   
   return clonedSvg.outerHTML;
 }

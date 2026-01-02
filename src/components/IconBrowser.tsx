@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import IconItem from './IconItem';
-import { featherIcons } from '@/lib/iconData';
+import { getIconsFromPacks, availablePackIds, type IconMetadata } from '@/lib/iconData';
 import { Input } from './ui/input';
 import ColorPicker from './ColorPicker';
 import { Dropdown, DropdownItem } from './ui/dropdown';
 import { Button } from './ui/button';
 import PaddingSettings from './PaddingSettings';
+import IconPackSelectorSidebar from './IconPackSelectorSidebar';
+import { Pagination } from './ui/pagination';
+import IconPreview from './IconPreview';
+import CollapsibleSection from './CollapsibleSection';
 import { generateComplementaryColor, isDarkMode, adjustColorsForDarkMode } from '@/lib/iconUtils';
 
 interface IconBrowserProps {
@@ -13,10 +17,11 @@ interface IconBrowserProps {
 }
 
 const DEFAULT_SIZES = [64, 128, 512, 1024];
-const DISPLAY_SIZE = 64; // Fixed size for gallery display
+const DISPLAY_SIZE = 32; // Fixed size for gallery display
 
 const DEFAULT_COLOR = '#64748b'; // rgb(100, 116, 139)
 const DEFAULT_PADDING = 0.10; // 10% padding (Medium preset)
+const ITEMS_PER_PAGE = 80; // Number of icons per page
 
 export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowserProps) {
   const [searchValue, setSearchValue] = useState('');
@@ -27,8 +32,10 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const [customSize, setCustomSize] = useState<string>('');
   const [showCustomSize, setShowCustomSize] = useState(false);
   const [iconPadding, setIconPadding] = useState<number>(DEFAULT_PADDING);
-  const [filteredIcons, setFilteredIcons] = useState<typeof featherIcons>([]);
+  const [filteredIcons, setFilteredIcons] = useState<IconMetadata[]>([]);
+  const [selectedPacks, setSelectedPacks] = useState<string[]>(availablePackIds);
   const [darkMode, setDarkMode] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Detect platform for keyboard shortcut display
@@ -100,9 +107,29 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
       }
     }
 
-    // Initialize icons
-    if (featherIcons && featherIcons.length > 0) {
-      setFilteredIcons(featherIcons);
+    // Load saved icon pack selection
+    const savedPacks = localStorage.getItem('selectedIconPacks');
+    let initialSelectedPacks = availablePackIds;
+    if (savedPacks) {
+      try {
+        const parsedPacks = JSON.parse(savedPacks);
+        // Validate that all saved packs are still available
+        const validPacks = parsedPacks.filter((packId: string) =>
+          availablePackIds.includes(packId)
+        );
+        if (validPacks.length > 0) {
+          initialSelectedPacks = validPacks;
+          setSelectedPacks(validPacks);
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved icon packs:', e);
+      }
+    }
+
+    // Initialize icons based on selected packs
+    const initialIcons = getIconsFromPacks(initialSelectedPacks);
+    if (initialIcons && initialIcons.length > 0) {
+      setFilteredIcons(initialIcons);
     } else {
       console.warn('No icons loaded');
     }
@@ -138,21 +165,34 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     };
   }, []);
 
+  // Update icons when selected packs change
   useEffect(() => {
-    // Filter icons based on search
-    if (!searchValue) {
-      setFilteredIcons(featherIcons);
-      return;
+    const icons = getIconsFromPacks(selectedPacks);
+    
+    // Apply search filter if there's a search value
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      const filtered = icons.filter(
+        (icon) =>
+          icon.displayName.toLowerCase().includes(searchLower) ||
+          icon.name.toLowerCase().includes(searchLower)
+      );
+      setFilteredIcons(filtered);
+    } else {
+      setFilteredIcons(icons);
     }
+    
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  }, [selectedPacks, searchValue]);
 
-    const searchLower = searchValue.toLowerCase();
-    const filtered = featherIcons.filter(
-      (icon) =>
-        icon.displayName.toLowerCase().includes(searchLower) ||
-        icon.name.toLowerCase().includes(searchLower)
-    );
-    setFilteredIcons(filtered);
-  }, [searchValue]);
+  // Ensure current page is valid when filtered icons change
+  useEffect(() => {
+    const totalPages = Math.ceil(filteredIcons.length / ITEMS_PER_PAGE);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [filteredIcons.length, currentPage]);
 
   // Keyboard shortcut: Cmd+K (Mac) or Ctrl+K (Windows/Linux) to focus search
   useEffect(() => {
@@ -259,6 +299,11 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     );
   };
 
+  const handlePackSelectionChange = (packs: string[]) => {
+    setSelectedPacks(packs);
+    localStorage.setItem('selectedIconPacks', JSON.stringify(packs));
+  };
+
   const handleSwapColors = () => {
     if (backgroundColor === 'transparent') {
       // Can't swap if background is transparent
@@ -288,115 +333,20 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
 
   const displayColors = getDisplayColors();
 
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredIcons.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedIcons = filteredIcons.slice(startIndex, endIndex);
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 space-y-4">
-        <div className="flex flex-col gap-4 p-4 border rounded-lg bg-card">
-          <h3 className="text-lg font-semibold">Settings</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Icon Size */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Icon Size (px)</label>
-              <div className="flex gap-2">
-                <div className="flex flex-wrap gap-1 flex-1">
-                  {DEFAULT_SIZES.map((size) => (
-                    <Button
-                      key={size}
-                      variant={iconSize === size ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-8 px-2 text-xs"
-                      onClick={() => handleSizeChange(size)}
-                    >
-                      {size}
-                    </Button>
-                  ))}
-                  <Button
-                    variant={showCustomSize ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => handleSizeChange('custom')}
-                  >
-                    Custom
-                  </Button>
-                </div>
-              </div>
-              {showCustomSize && (
-                <Input
-                  type="number"
-                  min="1"
-                  max="2048"
-                  placeholder="Size (px)"
-                  value={customSize}
-                  onChange={(e) => handleCustomSizeChange(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              )}
-            </div>
-
-            {/* Colors */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Colors</label>
-              <ColorPicker
-                backgroundValue={backgroundColor}
-                foregroundValue={foregroundColor}
-                onBackgroundChange={handleBackgroundChange}
-                onForegroundChange={handleForegroundChange}
-                onSwap={handleSwapColors}
-              />
-            </div>
-
-            {/* Copy Format */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Copy as</label>
-              <Dropdown
-                trigger={
-                  <Button variant="outline" size="sm" className="w-full justify-between">
-                    {copyFormat === 'text' ? 'SVG' : 'PNG'}
-                    <svg
-                      className="ml-2 h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </Button>
-                }
-                align="left"
-              >
-                <DropdownItem
-                  onClick={() => handleFormatChange('text')}
-                  className={copyFormat === 'text' ? 'bg-accent' : ''}
-                >
-                  SVG
-                </DropdownItem>
-                <DropdownItem
-                  onClick={() => handleFormatChange('png')}
-                  className={copyFormat === 'png' ? 'bg-accent' : ''}
-                >
-                  PNG
-                </DropdownItem>
-              </Dropdown>
-            </div>
-
-            {/* Padding Settings */}
-            <PaddingSettings
-              iconColor={displayColors.fg}
-              backgroundColor={displayColors.bg}
-              value={iconPadding}
-              onChange={handlePaddingChange}
-            />
-          </div>
-        </div>
-
-        <div className="sticky top-0 z-10 bg-background pb-4 pt-2 -mx-4 px-4">
-          <div className="relative w-full">
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-80 border-r border-border bg-background flex flex-col overflow-hidden">
+        {/* Title and Search - Always visible */}
+        <div className="p-4 border-b border-border">
+          <h1 className="text-2xl font-bold mb-4">Icon Clipboard</h1>
+          <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -444,30 +394,168 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
             )}
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-        {filteredIcons.map((icon) => (
-          <IconItem
-            key={icon.name}
-            IconComponent={icon.component}
-            iconName={icon.name}
-            displayName={icon.displayName}
-            iconColor={displayColors.fg}
-            backgroundColor={displayColors.bg}
-            copyFormat={copyFormat}
-            displaySize={DISPLAY_SIZE}
-            copySize={iconSize}
-            padding={iconPadding}
-          />
-        ))}
-      </div>
+        {/* Scrollable sidebar content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Icon Packs Section */}
+          <CollapsibleSection title="Icon Packs" defaultOpen={true}>
+            <IconPackSelectorSidebar
+              selectedPacks={selectedPacks}
+              onSelectionChange={handlePackSelectionChange}
+            />
+          </CollapsibleSection>
 
-      {filteredIcons.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          No icons found matching "{searchValue}"
+          {/* Settings Section */}
+          <CollapsibleSection title="Settings" defaultOpen={true}>
+            <div className="flex flex-col gap-4">
+              {/* Icon Size */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-muted-foreground">Icon Size (px)</label>
+                <div className="flex flex-wrap gap-1">
+                  {DEFAULT_SIZES.map((size) => (
+                    <Button
+                      key={size}
+                      variant={iconSize === size ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => handleSizeChange(size)}
+                    >
+                      {size}
+                    </Button>
+                  ))}
+                  <Button
+                    variant={showCustomSize ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => handleSizeChange('custom')}
+                  >
+                    Custom
+                  </Button>
+                </div>
+                {showCustomSize && (
+                  <Input
+                    type="number"
+                    min="1"
+                    max="2048"
+                    placeholder="Size (px)"
+                    value={customSize}
+                    onChange={(e) => handleCustomSizeChange(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                )}
+              </div>
+
+              {/* Colors */}
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-center">
+                  <ColorPicker
+                    backgroundValue={backgroundColor}
+                    foregroundValue={foregroundColor}
+                    onBackgroundChange={handleBackgroundChange}
+                    onForegroundChange={handleForegroundChange}
+                    onSwap={handleSwapColors}
+                  />
+                </div>
+              </div>
+
+              {/* Copy Format */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-muted-foreground">Copy as</label>
+                <Dropdown
+                  trigger={
+                    <Button variant="outline" size="sm" className="w-full justify-between">
+                      {copyFormat === 'text' ? 'SVG' : 'PNG'}
+                      <svg
+                        className="ml-2 h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </Button>
+                  }
+                  align="left"
+                >
+                  <DropdownItem
+                    onClick={() => handleFormatChange('text')}
+                    className={copyFormat === 'text' ? 'bg-accent' : ''}
+                  >
+                    SVG
+                  </DropdownItem>
+                  <DropdownItem
+                    onClick={() => handleFormatChange('png')}
+                    className={copyFormat === 'png' ? 'bg-accent' : ''}
+                  >
+                    PNG
+                  </DropdownItem>
+                </Dropdown>
+              </div>
+
+              {/* Padding Settings */}
+              <PaddingSettings
+                value={iconPadding}
+                onChange={handlePaddingChange}
+              />
+            </div>
+          </CollapsibleSection>
+
+          {/* Preview Section */}
+          <CollapsibleSection title="Preview" defaultOpen={true}>
+            <IconPreview
+              iconColor={displayColors.fg}
+              backgroundColor={displayColors.bg}
+              padding={iconPadding}
+            />
+          </CollapsibleSection>
         </div>
-      )}
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto bg-muted/30">
+        <div className="p-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+            {paginatedIcons.map((icon) => (
+              <IconItem
+                key={`${icon.packId}-${icon.name}`}
+                IconComponent={icon.component}
+                iconName={icon.name}
+                displayName={icon.displayName}
+                iconColor={displayColors.fg}
+                backgroundColor={displayColors.bg}
+                copyFormat={copyFormat}
+                displaySize={DISPLAY_SIZE}
+                copySize={iconSize}
+                padding={iconPadding}
+              />
+            ))}
+          </div>
+
+          {filteredIcons.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              No icons found matching "{searchValue}"
+            </div>
+          )}
+
+          {filteredIcons.length > 0 && totalPages > 1 && (
+            <div className="mt-8 flex flex-col items-center gap-4">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+              <p className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredIcons.length)} of {filteredIcons.length} icons
+              </p>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

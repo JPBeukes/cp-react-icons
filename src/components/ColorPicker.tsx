@@ -220,7 +220,7 @@ export default function ColorPicker({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* Foreground Color Swatch */}
         <div className="flex flex-col items-center gap-1.5">
           <label className="text-xs font-semibold text-foreground">FG</label>
@@ -236,21 +236,24 @@ export default function ColorPicker({
         </div>
 
         {/* Control Buttons */}
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col justify-center gap-1.5 mt-5">
           {/* Swap Button */}
-          {onSwap && backgroundValue !== 'transparent' && (
+          {onSwap && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onSwap();
+                if (backgroundValue !== 'transparent') {
+                  onSwap();
+                }
               }}
-              className="h-8 w-8 rounded-md border border-border hover:border-primary hover:bg-accent transition-colors flex items-center justify-center"
+              disabled={backgroundValue === 'transparent'}
+              className="h-7 w-7 rounded-md border border-border hover:border-primary hover:bg-accent transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-transparent"
               aria-label="Swap background and foreground colors"
-              title="Swap colors"
+              title={backgroundValue === 'transparent' ? 'Cannot swap when background is transparent' : 'Swap colors'}
             >
               <svg
-                className="w-4 h-4 text-muted-foreground"
+                className={`w-3.5 h-3.5 ${backgroundValue === 'transparent' ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -269,7 +272,7 @@ export default function ColorPicker({
           <button
             type="button"
             onClick={handleToggleLink}
-            className={`h-8 w-8 rounded-md border transition-colors flex items-center justify-center ${
+            className={`h-7 w-7 rounded-md border transition-colors flex items-center justify-center ${
               isLinked
                 ? 'border-primary bg-primary/10 hover:bg-primary/20'
                 : 'border-border hover:border-primary hover:bg-accent'
@@ -278,7 +281,7 @@ export default function ColorPicker({
             title={isLinked ? 'Unlink colors' : 'Link colors'}
           >
             <svg
-              className={`w-4 h-4 ${isLinked ? 'text-primary' : 'text-muted-foreground'}`}
+              className={`w-3.5 h-3.5 ${isLinked ? 'text-primary' : 'text-muted-foreground'}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
