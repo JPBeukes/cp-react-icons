@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { IconType } from 'react-icons';
-import { getSvgStringFromElement } from '@/lib/iconUtils';
+import { getSvgStringFromElement, applyPackSpecificColorToSvg } from '@/lib/iconUtils';
 import { copySvgToClipboard, copySvgAsPng } from '@/lib/clipboard';
 import { toast } from 'sonner';
 
@@ -8,6 +8,7 @@ interface IconItemProps {
   IconComponent: IconType;
   iconName: string;
   displayName: string;
+  packId?: string;
   iconColor: string;
   backgroundColor?: string;
   copyFormat: 'text' | 'png';
@@ -21,6 +22,7 @@ export default function IconItem({
   IconComponent,
   iconName,
   displayName,
+  packId,
   iconColor,
   backgroundColor = 'transparent',
   copyFormat,
@@ -104,6 +106,16 @@ export default function IconItem({
     setCurrentCornerRadius(cornerRadius);
   }, [cornerRadius]);
 
+  // Apply pack-specific colors to SVG for display
+  useEffect(() => {
+    if (!iconRef.current || !packId) return;
+    const svg = iconRef.current.querySelector('svg');
+    if (!svg) return;
+    
+    // Apply pack-specific colors to SVG for display
+    applyPackSpecificColorToSvg(svg, iconColor, packId);
+  }, [iconColor, packId, IconComponent]);
+
   const handleClick = async () => {
     try {
       if (!iconRef.current) return;
@@ -114,7 +126,8 @@ export default function IconItem({
         backgroundColor,
         copySize,
         currentPadding,
-        currentCornerRadius
+        currentCornerRadius,
+        packId
       );
 
       if (svgString) {
@@ -188,6 +201,11 @@ export default function IconItem({
     return `${text.slice(0, startLength)}...${text.slice(-endLength)}`;
   };
 
+  // Calculate visual padding and corner radius
+  const paddingPx = displaySize * currentPadding;
+  const backgroundSize = displaySize + (paddingPx * 2);
+  const cornerRadiusPx = (backgroundSize * currentCornerRadius) / 100;
+
   return (
     <div
       ref={containerRef}
@@ -195,20 +213,38 @@ export default function IconItem({
       onClick={handleClick}
     >
       <div className="flex flex-col items-center gap-1.5">
+        {/* Icon wrapper with background, padding, and corner radius */}
         <div
-          className="flex items-center justify-center"
+          className="relative flex items-center justify-center"
           style={{ 
-            width: `${displaySize}px`, 
-            height: `${displaySize}px`,
+            width: `${backgroundSize}px`, 
+            height: `${backgroundSize}px`,
           }}
         >
+          {/* Background div - positioned behind icon */}
+          {backgroundColor !== 'transparent' && (
+            <div
+              className="absolute inset-0"
+              style={{
+                width: `${backgroundSize}px`,
+                height: `${backgroundSize}px`,
+                backgroundColor: backgroundColor,
+                borderRadius: `${cornerRadiusPx}px`,
+              }}
+            />
+          )}
+          {/* Icon container with CSS color for currentColor */}
           <div
             ref={iconRef}
-            className="flex items-center justify-center"
-            style={{ color: iconColor }}
+            className="relative flex items-center justify-center z-10"
+            style={{ 
+              color: iconColor,
+              width: `${displaySize}px`,
+              height: `${displaySize}px`,
+            }}
           >
             {IconComponent ? (
-              <IconComponent size={displaySize} color="#6b7280" />
+              <IconComponent size={displaySize} />
             ) : (
               <div className="w-full h-full bg-muted animate-pulse rounded" />
             )}

@@ -2,8 +2,8 @@
 import * as FiIcons from 'react-icons/fi';
 // Import all Phosphor icons from react-icons/pi
 import * as PiIcons from 'react-icons/pi';
-// Import all Font Awesome 6 icons from react-icons/fa6
-import * as Fa6Icons from 'react-icons/fa6';
+// Font Awesome 6 icons - commented out for now
+// import * as Fa6Icons from 'react-icons/fa6';
 import type { IconType } from 'react-icons';
 
 // Create icon metadata array
@@ -72,19 +72,19 @@ function createIconPack(
 // Create icon packs
 const featherPack = createIconPack('feather', 'Feather Icons', 'Fi', FiIcons);
 const phosphorPack = createIconPack('phosphor', 'Phosphor Icons', 'Pi', PiIcons);
-// Font Awesome 6 uses multiple prefixes: Fa, FaBrands, FaRegular, FaSolid
-const fa6Pack = createIconPack(
-  'fa6',
-  'Font Awesome 6',
-  ['Fa', 'FaBrands', 'FaRegular', 'FaSolid'],
-  Fa6Icons
-);
+// Font Awesome 6 - commented out for now
+// const fa6Pack = createIconPack(
+//   'fa6',
+//   'Font Awesome 6',
+//   ['Fa', 'FaBrands', 'FaRegular', 'FaSolid'],
+//   Fa6Icons
+// );
 
 // Export icon packs as a record
 export const iconPacks: Record<string, IconPackMetadata> = {
   feather: featherPack,
   phosphor: phosphorPack,
-  fa6: fa6Pack,
+  // fa6: fa6Pack,
 };
 
 // Get all available pack IDs
