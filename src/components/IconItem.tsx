@@ -3,6 +3,7 @@ import type { IconType } from 'react-icons';
 import { getSvgStringFromElement, applyPackSpecificColorToSvg } from '@/lib/iconUtils';
 import { copySvgToClipboard, copySvgAsPng } from '@/lib/clipboard';
 import { toast } from 'sonner';
+import { trackEvent } from '@/lib/posthog';
 
 interface IconItemProps {
   IconComponent: IconType;
@@ -143,6 +144,17 @@ export default function IconItem({
             formatName = 'SVG';
           }
 
+          // Track icon copy event
+          trackEvent('icon_copied', {
+            icon_name: displayName,
+            icon_pack: packId || 'unknown',
+            copy_format: currentFormat === 'png' ? 'png' : 'svg',
+            icon_size: currentCopySize,
+            padding: currentPadding,
+            corner_radius: currentCornerRadius,
+            has_background: backgroundColor !== 'transparent',
+          });
+
           // Show success toast
           toast.success(`${displayName} icon copied as ${formatName} to clipboard`, {
             duration: 3000,
@@ -160,6 +172,16 @@ export default function IconItem({
           }
         } catch (copyError: any) {
           console.error('Failed to copy icon:', copyError);
+          
+          // Track clipboard error
+          trackEvent('clipboard_error', {
+            icon_name: displayName,
+            icon_pack: packId || 'unknown',
+            copy_format: currentFormat === 'png' ? 'png' : 'svg',
+            error_message: copyError.message || 'Unknown error',
+            error_type: copyError.message?.includes('not supported') ? 'not_supported' : 
+                       copyError.message?.includes('permissions') ? 'permission_denied' : 'unknown',
+          });
           
           // Show user-friendly error toast
           let errorMessage = 'Failed to copy icon to clipboard';
@@ -180,6 +202,14 @@ export default function IconItem({
       }
     } catch (error) {
       console.error('Failed to process icon:', error);
+      
+      // Track icon processing error
+      trackEvent('icon_processing_error', {
+        icon_name: displayName,
+        icon_pack: packId || 'unknown',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
       toast.error('Failed to process icon. Please try again.', {
         duration: 4000,
       });

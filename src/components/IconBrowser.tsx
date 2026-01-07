@@ -13,6 +13,7 @@ import { Pagination } from './ui/pagination';
 import IconPreview from './IconPreview';
 import CollapsibleSection from './CollapsibleSection';
 import { generateComplementaryColor, isDarkMode, adjustColorsForDarkMode } from '@/lib/iconUtils';
+import { trackEvent } from '@/lib/posthog';
 
 interface IconBrowserProps {
   initialColor?: string;
@@ -216,6 +217,21 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     setCurrentPage(1);
   }, [selectedPacks, searchValue]);
 
+  // Track search with debouncing
+  useEffect(() => {
+    if (!searchValue) return;
+
+    const debounceTimer = setTimeout(() => {
+      trackEvent('icon_searched', {
+        search_term: searchValue,
+        results_count: filteredIcons.length,
+        selected_packs_count: selectedPacks.length,
+      });
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchValue, filteredIcons.length, selectedPacks.length]);
+
   // Ensure current page is valid when filtered icons change
   useEffect(() => {
     const totalPages = Math.ceil(filteredIcons.length / ITEMS_PER_PAGE);
@@ -235,6 +251,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
       if (isModifierPressed && isKKey) {
         e.preventDefault();
         e.stopPropagation();
+        
+        // Track keyboard shortcut usage
+        const shortcut = e.metaKey ? 'cmd+k' : 'ctrl+k';
+        trackEvent('keyboard_shortcut_used', {
+          shortcut,
+        });
         
         // If sidebar is collapsed on desktop, expand it first
         if (sidebarCollapsed && !isMobile) {
@@ -269,12 +291,19 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   }, [searchValue, sidebarCollapsed, isMobile]);
 
   const clearSearch = () => {
+    trackEvent('search_cleared');
     setSearchValue('');
   };
 
   const handleFormatChange = (format: 'text' | 'png') => {
     setCopyFormat(format);
     localStorage.setItem('copyFormat', format);
+    
+    // Track copy format change
+    trackEvent('copy_format_changed', {
+      format: format === 'png' ? 'png' : 'svg',
+    });
+    
     // Dispatch event so IconItems can update
     document.dispatchEvent(
       new CustomEvent('copyFormatChange', {
@@ -287,6 +316,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const handleSizeChange = (size: number) => {
     setIconSize(size);
     localStorage.setItem('iconSize', size.toString());
+    
+    // Track icon size change
+    trackEvent('icon_size_changed', {
+      size,
+    });
+    
     document.dispatchEvent(
       new CustomEvent('iconSizeChange', {
         detail: { size },
@@ -298,6 +333,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const handlePaddingChange = (padding: number) => {
     setIconPadding(padding);
     localStorage.setItem('iconPadding', padding.toString());
+    
+    // Track padding change
+    trackEvent('padding_changed', {
+      padding,
+    });
+    
     document.dispatchEvent(
       new CustomEvent('iconPaddingChange', {
         detail: { padding },
@@ -309,6 +350,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const handleCornerRadiusChange = (radius: number) => {
     setCornerRadius(radius);
     localStorage.setItem('iconCornerRadius', radius.toString());
+    
+    // Track corner radius change
+    trackEvent('corner_radius_changed', {
+      radius,
+    });
+    
     document.dispatchEvent(
       new CustomEvent('iconCornerRadiusChange', {
         detail: { radius },
@@ -320,12 +367,26 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const handleBackgroundChange = (color: string) => {
     setBackgroundColor(color);
     localStorage.setItem('iconBackgroundColor', color);
+    
+    // Track background color change
+    trackEvent('color_changed', {
+      type: 'background',
+      color,
+    });
+    
     // Note: Complementary color generation is handled by ColorPicker component
   };
 
   const handleForegroundChange = (color: string) => {
     setForegroundColor(color);
     localStorage.setItem('iconColor', color);
+    
+    // Track foreground color change
+    trackEvent('color_changed', {
+      type: 'foreground',
+      color,
+    });
+    
     document.dispatchEvent(
       new CustomEvent('iconColorChange', {
         detail: { color },
@@ -337,6 +398,12 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
   const handlePackSelectionChange = (packs: string[]) => {
     setSelectedPacks(packs);
     localStorage.setItem('selectedIconPacks', JSON.stringify(packs));
+    
+    // Track icon pack selection change
+    trackEvent('icon_pack_selected', {
+      selected_packs: packs,
+      pack_count: packs.length,
+    });
   };
 
   const handleSwapColors = () => {
@@ -350,6 +417,10 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     setForegroundColor(newFg);
     localStorage.setItem('iconBackgroundColor', newBg);
     localStorage.setItem('iconColor', newFg);
+    
+    // Track color swap
+    trackEvent('colors_swapped');
+    
     document.dispatchEvent(
       new CustomEvent('iconColorChange', {
         detail: { color: newFg },
@@ -376,14 +447,36 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
 
   const toggleSidebar = () => {
     if (isMobile) {
-      setMobileMenuOpen(!mobileMenuOpen);
+      const newState = !mobileMenuOpen;
+      setMobileMenuOpen(newState);
+      
+      // Track mobile menu toggle
+      trackEvent('mobile_menu_toggled', {
+        state: newState ? 'opened' : 'closed',
+      });
     } else {
-      setSidebarCollapsed(!sidebarCollapsed);
+      const newState = !sidebarCollapsed;
+      setSidebarCollapsed(newState);
+      
+      // Track sidebar toggle
+      trackEvent('sidebar_toggled', {
+        state: newState ? 'closed' : 'opened',
+      });
     }
   };
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    
+    // Track page change
+    trackEvent('page_changed', {
+      page_number: page,
+      total_pages: totalPages,
+    });
   };
 
   const handleSearchIconClick = () => {
@@ -726,7 +819,7 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
-                onPageChange={setCurrentPage}
+                onPageChange={handlePageChange}
               />
               <p className="text-sm text-muted-foreground">
                 Showing {startIndex + 1}-{Math.min(endIndex, filteredIcons.length)} of {filteredIcons.length} icons
