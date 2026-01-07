@@ -1,64 +1,63 @@
-import posthog from 'posthog-js';
-
-let posthogInitialized = false;
-
 /**
- * Initialize PostHog analytics
+ * Get the PostHog instance from window
+ * PostHog is initialized via the inline script in posthog.astro
  */
-export function initPostHog(): void {
-  // Only initialize once
-  if (posthogInitialized) {
-    return;
-  }
-
-  // Check if we're in the browser
+function getPostHogInstance(): any {
   if (typeof window === 'undefined') {
-    return;
+    return null;
   }
-
-  const posthogKey = import.meta.env.PUBLIC_POSTHOG_KEY;
-  const posthogHost = import.meta.env.PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
-
-  if (!posthogKey) {
-    console.warn('PostHog key not found. Analytics will not be initialized.');
-    return;
-  }
-
-  try {
-    posthog.init(posthogKey, {
-      api_host: posthogHost,
-      loaded: (posthog) => {
-        if (import.meta.env.DEV) {
-          console.log('PostHog initialized');
-        }
-      },
-      // Enable automatic page view tracking
-      capture_pageview: true,
-      capture_pageleave: true,
-      // Enable session recording (optional, can be disabled)
-      disable_session_recording: false,
-      // Enable autocapture for clicks and form submissions
-      autocapture: true,
-    });
-
-    posthogInitialized = true;
-  } catch (error) {
-    console.error('Failed to initialize PostHog:', error);
-  }
+  
+  // PostHog is initialized via inline script, so it should be available on window
+  const posthog = (window as any).posthog;
+  
+  // PostHog creates a stub that queues events before the library loads
+  // The stub has methods like capture() that push to _i array
+  return posthog || null;
 }
 
 /**
  * Track a custom event
  */
 export function trackEvent(eventName: string, properties?: Record<string, any>): void {
-  if (typeof window === 'undefined' || !posthogInitialized) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const posthog = getPostHogInstance();
+  
+  if (!posthog) {
+    if (import.meta.env.DEV) {
+      console.warn('⚠️ PostHog not available. Event not tracked:', eventName);
+    }
     return;
   }
 
   try {
-    posthog.capture(eventName, properties);
+    // PostHog's inline script creates stub methods that queue events
+    // The capture method should always be available as a function
+    // It will either execute immediately (if loaded) or queue the event (if still loading)
+    if (typeof posthog.capture === 'function') {
+      posthog.capture(eventName, properties);
+      
+      if (import.meta.env.DEV) {
+        console.log('✅ PostHog event tracked:', eventName, properties);
+      }
+    } else {
+      // Fallback: manually queue the event if capture method isn't available
+      // This shouldn't happen with the inline script, but just in case
+      if (posthog._i && Array.isArray(posthog._i)) {
+        posthog._i.push(['capture', eventName, properties]);
+        if (import.meta.env.DEV) {
+          console.log('📋 PostHog event queued manually:', eventName, properties);
+        }
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ PostHog capture method not available. Event:', eventName);
+        }
+      }
+    }
   } catch (error) {
-    console.error('Failed to track event:', error);
+    console.error('❌ Failed to track event:', error, eventName, properties);
   }
 }
 
@@ -66,7 +65,8 @@ export function trackEvent(eventName: string, properties?: Record<string, any>):
  * Identify a user (optional, for when you have user info)
  */
 export function identifyUser(userId: string, properties?: Record<string, any>): void {
-  if (typeof window === 'undefined' || !posthogInitialized) {
+  const posthog = getPostHogInstance();
+  if (!posthog) {
     return;
   }
 
@@ -81,7 +81,8 @@ export function identifyUser(userId: string, properties?: Record<string, any>): 
  * Reset user identification (for logout)
  */
 export function resetUser(): void {
-  if (typeof window === 'undefined' || !posthogInitialized) {
+  const posthog = getPostHogInstance();
+  if (!posthog) {
     return;
   }
 
@@ -95,10 +96,7 @@ export function resetUser(): void {
 /**
  * Get the PostHog instance (for advanced usage)
  */
-export function getPostHog(): typeof posthog | null {
-  if (typeof window === 'undefined' || !posthogInitialized) {
-    return null;
-  }
-  return posthog;
+export function getPostHog(): any {
+  return getPostHogInstance();
 }
 

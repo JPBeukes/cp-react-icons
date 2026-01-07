@@ -196,6 +196,19 @@ export default function IconBrowser({ initialColor = DEFAULT_COLOR }: IconBrowse
     };
   }, []);
 
+  // Track page load/initialization
+  useEffect(() => {
+    // Small delay to ensure PostHog is loaded
+    const timer = setTimeout(() => {
+      trackEvent('icon_browser_loaded', {
+        selected_packs_count: selectedPacks.length,
+        total_icons: filteredIcons.length,
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []); // Only run once on mount
+
   // Update icons when selected packs change
   useEffect(() => {
     const icons = getIconsFromPacks(selectedPacks);
